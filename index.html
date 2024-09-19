@@ -3,21 +3,44 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Real-time Landmark Recognition</title>
+    <title>Landmark Explorer</title>
     <style>
         body {
             font-family: Arial, sans-serif;
             margin: 0;
             padding: 0;
             display: flex;
-            justify-content: center;
-            align-items: center;
+            flex-direction: column;
             min-height: 100vh;
             background-color: #f0f0f0;
         }
         .container {
-            position: relative;
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        #landingPage {
+            text-align: center;
+        }
+        #startButton {
+            font-size: 18px;
+            padding: 10px 20px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        #explorerPage {
+            display: none;
+            width: 100%;
             max-width: 800px;
+        }
+        #videoContainer {
+            position: relative;
             width: 100%;
             background-color: white;
             border-radius: 10px;
@@ -47,21 +70,49 @@
         ul {
             padding-left: 20px;
         }
+        #navbar {
+            display: flex;
+            justify-content: space-around;
+            background-color: #333;
+            padding: 10px 0;
+        }
+        #navbar a {
+            color: white;
+            text-decoration: none;
+            padding: 5px 10px;
+        }
     </style>
 </head>
 <body>
     <div class="container">
-        <video id="videoFeed" autoplay playsinline muted></video>
-        <canvas id="arOverlay"></canvas>
-        <div id="facts">
-            <h2>Landmark Facts</h2>
-            <p id="landmarkName"></p>
-            <ul id="factsList"></ul>
+        <div id="landingPage">
+            <h1>Welcome to Landmark Explorer</h1>
+            <p>Discover landmarks around you in real-time!</p>
+            <button id="startButton">Start Exploring</button>
         </div>
+        <div id="explorerPage">
+            <div id="videoContainer">
+                <video id="videoFeed" autoplay playsinline muted></video>
+                <canvas id="arOverlay"></canvas>
+            </div>
+            <div id="facts">
+                <h2>Landmark Facts</h2>
+                <p id="landmarkName"></p>
+                <ul id="factsList"></ul>
+            </div>
+        </div>
+    </div>
+    <div id="navbar">
+        <a href="#home">Home</a>
+        <a href="#recent">Recent Locations</a>
+        <a href="#settings">Settings</a>
     </div>
 
     <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyDmnge0f1XdxLvvBPMW1pJKe5QQmGsKTiQ&libraries=places"></script>
     <script>
+        const landingPage = document.getElementById('landingPage');
+        const explorerPage = document.getElementById('explorerPage');
+        const startButton = document.getElementById('startButton');
         const video = document.getElementById('videoFeed');
         const canvas = document.getElementById('arOverlay');
         const ctx = canvas.getContext('2d');
@@ -70,6 +121,21 @@
         
         let lastDetectedLandmark = '';
         let isProcessing = false;
+
+        startButton.addEventListener('click', () => {
+            landingPage.style.display = 'none';
+            explorerPage.style.display = 'block';
+            startExplorer();
+        });
+
+        async function startExplorer() {
+            try {
+                await startCamera();
+                setInterval(processFrame, 5000); // Process a frame every 5 seconds
+            } catch (error) {
+                console.error('Error starting explorer:', error);
+            }
+        }
 
         async function startCamera() {
             try {
@@ -85,131 +151,21 @@
                 video.srcObject = stream;
 
                 return new Promise((resolve) => {
-                    video.onloadedmetadata = () => resolve(video);
+                    video.onloadedmetadata = () => {
+                        canvas.width = video.videoWidth;
+                        canvas.height = video.videoHeight;
+                        resolve(video);
+                    };
                 });
-                
-                await video.play();
-                
-                console.log('Camera started successfully');
-                
-                setInterval(processFrame, 5000); // Process a frame every 5 seconds
-                
             } catch (error) {
                 console.error('Error accessing camera:', error);
                 throw error;
             }
-            
         }
 
-        async function captureFrame() {
-          const tempCanvas = document.createElement('canvas');
-          tempCanvas.width = video.videoWidth;
-          tempCanvas.height = video.videoHeight;
-          tempCanvas.getContext('2d').drawImage(video, 0, 0);
-          return tempCanvas.toDataURL('image/jpeg', 0.8).split(',')[1];
-      }
+        // ... (keep the rest of the functions: captureFrame, detectLandmark, fetchLandmarkFacts, displayFacts, drawAROverlay, processFrame)
 
-      async function detectLandmark(imageData) {
-          const apiUrl = `https://vision.googleapis.com/v1/images:annotate?key=YOUR_API_KEY`;
-          const requestBody = {
-              requests: [{
-                  image: { content: imageData },
-                  features: [{ type: 'LANDMARK_DETECTION', maxResults: 1 }]
-              }]
-          };
-
-          const response = await fetch(apiUrl, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(requestBody)
-          });
-
-          if (!response.ok) {
-              throw new Error('Failed to fetch data from Google Vision API');
-          }
-
-          const data = await response.json();
-          return data.responses[0].landmarkAnnotations || [];
-      }
-
-      async function fetchLandmarkFacts(landmarkName) {
-          const apiUrl = `https://en.wikipedia.org/w/api.php?action=query&format=json&prop=extracts&exintro=false&explaintext=true&titles=${encodeURIComponent(landmarkName)}&origin=*`;
-
-          const response = await fetch(apiUrl);
-          if (!response.ok) {
-              throw new Error('Failed to fetch landmark information');
-          }
-
-          const data = await response.json();
-          const pages = data.query.pages;
-          const pageId = Object.keys(pages)[0];
-          const page = pages[pageId];
-
-          return page.extract ? page.extract : 'No description available.';
-      }
-
-      function displayFacts(name, facts) {
-          landmarkName.textContent = name || "No landmark detected";
-          factsList.innerHTML = '';
-          
-           if (facts) {
-               const sentences = facts.split('. ').filter(s => s.trim().length > 0);
-               const topFacts = sentences.slice(0, 10).map(s => s.trim() + (s.endsWith('.') ? '' : '.'));
-
-               topFacts.forEach(fact => {
-                   const li = document.createElement('li');
-                   li.textContent = fact;
-                   factsList.appendChild(li);
-               });
-           }
-       }
-
-       function drawAROverlay(name, location) {
-           ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-           // Draw landmark info
-           ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
-           ctx.fillRect(0, 0, canvas.width, 50);
-           ctx.fillStyle = 'white';
-           ctx.font = '20px Arial';
-           ctx.fillText(name || "No landmark detected", 10, 35);
-           if (location) {
-               ctx.fillText(`Lat: ${location.latitude.toFixed(4)}, Lng: ${location.longitude.toFixed(4)}`, 10, 70);
-           }
-       }
-
-       async function processFrame() {
-           if (isProcessing) return;
-           isProcessing = true;
-
-           try {
-               console.log('Processing frame...');
-               const imageData = await captureFrame();
-               const landmarks = await detectLandmark(imageData);
-
-               if (landmarks.length > 0) {
-                   const landmark = landmarks[0];
-                   if (landmark.score >= 0.5 && landmark.description !== lastDetectedLandmark) {
-                       lastDetectedLandmark = landmark.description;
-                       const facts = await fetchLandmarkFacts(landmark.description);
-                       displayFacts(landmark.description, facts);
-                       drawAROverlay(landmark.description, landmark.locations[0]);
-                   } else {
-                       drawAROverlay(null, null);
-                   }
-               } else {
-                   drawAROverlay(null, null);
-               }
-               
-           } catch (error) {
-               console.error('Error processing frame:', error);
-           } finally {
-               isProcessing = false;
-           }
-       }
-
-       startCamera();
-      
+        // Don't call startCamera() here anymore, it's called from startExplorer()
     </script>
 </body>
 </html>
