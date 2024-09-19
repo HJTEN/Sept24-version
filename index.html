@@ -81,6 +81,16 @@
             text-decoration: none;
             padding: 5px 10px;
         }
+        #statusMessage {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background-color: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 5px 10px;
+            border-radius: 5px;
+            z-index: 1000;
+        }
     </style>
 </head>
 <body>
@@ -94,6 +104,7 @@
             <div id="videoContainer">
                 <video id="videoFeed" autoplay playsinline muted></video>
                 <canvas id="arOverlay"></canvas>
+                <div id="statusMessage">Initializing...</div>
             </div>
             <div id="facts">
                 <h2>Landmark Facts</h2>
@@ -118,6 +129,7 @@
         const ctx = canvas.getContext('2d');
         const landmarkName = document.getElementById('landmarkName');
         const factsList = document.getElementById('factsList');
+        const statusMessage = document.getElementById('statusMessage');
         
         let lastDetectedLandmark = '';
         let isProcessing = false;
@@ -134,6 +146,7 @@
                 setInterval(processFrame, 5000); // Process a frame every 5 seconds
             } catch (error) {
                 console.error('Error starting explorer:', error);
+                statusMessage.textContent = 'Error: Unable to start explorer';
             }
         }
 
@@ -154,16 +167,124 @@
                     video.onloadedmetadata = () => {
                         canvas.width = video.videoWidth;
                         canvas.height = video.videoHeight;
+                        statusMessage.textContent = 'Camera ready. Detecting landmarks...';
                         resolve(video);
                     };
                 });
             } catch (error) {
                 console.error('Error accessing camera:', error);
+                statusMessage.textContent = 'Error: Unable to access camera';
                 throw error;
             }
         }
 
-        // ... (keep the rest of the functions: captureFrame, detectLandmark, fetchLandmarkFacts, displayFacts, drawAROverlay, processFrame)
+        async function captureFrame() {
+            const tempCanvas = document.createElement('canvas');
+            tempCanvas.width = video.videoWidth;
+            tempCanvas.height = video.videoHeight;
+            tempCanvas.getContext('2d').drawImage(video, 0, 0);
+            return tempCanvas.toDataURL('image/jpeg', 0.8).split(',')[1];
+        }
+
+        async function detectLandmark(imageData) {
+            const apiUrl = `https://vision.googleapis.com/v1/images:annotate?key=YOUR_API_KEY`;
+            const requestBody = {
+                requests: [{
+                    image: { content: imageData },
+                    features: [{ type: 'LANDMARK_DETECTION', maxResults: 1 }]
+                }]
+            };
+
+            const response = await fetch(apiUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(requestBody)
+            });
+
+            if (!response.ok) {
+                throw new Error('Failed to fetch data from Google Vision API');
+            }
+
+            const data = await response.json();
+            return data.responses[0].landmarkAnnotations || [];
+        }
+
+        async function fetchLandmarkFacts(landmarkName) {
+            const apiUrl = `https://en.wikipedia.org/w/api.php?action=query&format=json&prop=extracts&exintro=false&explaintext=true&titles=${encodeURIComponent(landmarkName)}&origin=*`;
+
+            const response = await fetch(apiUrl);
+            if (!response.ok) {
+                throw new Error('Failed to fetch landmark information');
+            }
+
+            const data = await response.json();
+            const pages = data.query.pages;
+            const pageId = Object.keys(pages)[0];
+            const page = pages[pageId];
+
+            return page.extract ? page.extract : 'No description available.';
+        }
+
+        function displayFacts(name, facts) {
+            landmarkName.textContent = name || "No landmark detected";
+            factsList.innerHTML = '';
+            
+            if (facts) {
+                const sentences = facts.split('. ').filter(s => s.trim().length > 0);
+                const topFacts = sentences.slice(0, 10).map(s => s.trim() + (s.endsWith('.') ? '' : '.'));
+
+                topFacts.forEach(fact => {
+                    const li = document.createElement('li');
+                    li.textContent = fact;
+                    factsList.appendChild(li);
+                });
+            }
+        }
+
+        function drawAROverlay(name, location) {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+            ctx.fillRect(0, 0, canvas.width, 50);
+            ctx.fillStyle = 'white';
+            ctx.font = '20px Arial';
+            ctx.fillText(name || "No landmark detected", 10, 35);
+            if (location) {
+                ctx.fillText(`Lat: ${location.latitude.toFixed(4)}, Lng: ${location.longitude.toFixed(4)}`, 10, 70);
+            }
+        }
+
+        async function processFrame() {
+            if (isProcessing) return;
+            isProcessing = true;
+
+            try {
+                statusMessage.textContent = 'Detecting landmarks...';
+                const imageData = await captureFrame();
+                const landmarks = await detectLandmark(imageData);
+
+                if (landmarks.length > 0) {
+                    const landmark = landmarks[0];
+                    if (landmark.score >= 0.5 && landmark.description !== lastDetectedLandmark) {
+                        lastDetectedLandmark = landmark.description;
+                        statusMessage.textContent = `Detected: ${landmark.description}`;
+                        const facts = await fetchLandmarkFacts(landmark.description);
+                        displayFacts(landmark.description, facts);
+                        drawAROverlay(landmark.description, landmark.locations[0]);
+                    } else {
+                        statusMessage.textContent = 'No new landmarks detected';
+                    }
+                } else {
+                    statusMessage.textContent = 'No landmarks detected';
+                    drawAROverlay(null, null);
+                }
+            } catch (error) {
+                console.error('Error processing frame:', error);
+                statusMessage.textContent = 'Error: Unable to process frame';
+            } finally {
+                isProcessing = false;
+            }
+        }
 
         // Don't call startCamera() here anymore, it's called from startExplorer()
     </script>
