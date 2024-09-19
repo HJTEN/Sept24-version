@@ -131,7 +131,7 @@
         const factsList = document.getElementById('factsList');
         const statusMessage = document.getElementById('statusMessage');
         
-        let lastDetectedLandmark = '';
+        let lastDetectedLandmarks = [];
         let isProcessing = false;
 
         startButton.addEventListener('click', () => {
@@ -153,7 +153,11 @@
         async function startCamera() {
             try {
                 const constraints = {
-                    video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } }
+                    video: { 
+                        facingMode: 'environment', 
+                        width: { ideal: 1920 }, 
+                        height: { ideal: 1080 } 
+                    }
                 };
                 
                 if (/iPhone|iPad|iPod/i.test(navigator.userAgent)) {
@@ -191,7 +195,7 @@
             const requestBody = {
                 requests: [{
                     image: { content: imageData },
-                    features: [{ type: 'LANDMARK_DETECTION', maxResults: 1 }]
+                    features: [{ type: 'LANDMARK_DETECTION', maxResults: 5 }]
                 }]
             };
 
@@ -247,17 +251,22 @@
             }
         }
 
-        function drawAROverlay(name, location) {
+        function drawAROverlay(landmarks) {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-            ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
-            ctx.fillRect(0, 0, canvas.width, 50);
-            ctx.fillStyle = 'white';
-            ctx.font = '20px Arial';
-            ctx.fillText(name || "No landmark detected", 10, 35);
-            if (location) {
-                ctx.fillText(`Lat: ${location.latitude.toFixed(4)}, Lng: ${location.longitude.toFixed(4)}`, 10, 70);
-            }
+            landmarks.forEach((landmark, index) => {
+                const { description, locations } = landmark;
+                const location = locations[0];
+
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+                ctx.fillRect(0, 50 * index, canvas.width, 50);
+                ctx.fillStyle = 'white';
+                ctx.font = '20px Arial';
+                ctx.fillText(description, 10, 35 + 50 * index);
+                if (location) {
+                    ctx.fillText(`Lat: ${location.latitude.toFixed(4)}, Lng: ${location.longitude.toFixed(4)}`, 10, 70 + 50 * index);
+                }
+            });
         }
 
         async function processFrame() {
@@ -270,19 +279,27 @@
                 const landmarks = await detectLandmark(imageData);
 
                 if (landmarks && landmarks.length > 0) {
-                    const landmark = landmarks[0];
-                    if (landmark.score >= 0.5 && landmark.description !== lastDetectedLandmark) {
-                        lastDetectedLandmark = landmark.description;
-                        statusMessage.textContent = `Detected: ${landmark.description}`;
+                    statusMessage.textContent = 'Landmarks detected: ';
+                    const newLandmarks = landmarks.filter(landmark => 
+                        landmark.score >= 0.3 && !lastDetectedLandmarks.includes(landmark.description)
+                    );
+
+                    for (const landmark of newLandmarks) {
+                        lastDetectedLandmarks.push(landmark.description);
+                        statusMessage.textContent += `${landmark.description}; `;
                         const facts = await fetchLandmarkFacts(landmark.description);
                         displayFacts(landmark.description, facts);
-                        drawAROverlay(landmark.description, landmark.locations[0]);
-                    } else {
-                        statusMessage.textContent = 'No new landmarks detected';
+                    }
+
+                    drawAROverlay(landmarks);
+
+                    // Keep only the last 5 detected landmarks
+                    if (lastDetectedLandmarks.length > 5) {
+                        lastDetectedLandmarks = lastDetectedLandmarks.slice(-5);
                     }
                 } else {
                     statusMessage.textContent = 'No landmarks detected in this frame';
-                    drawAROverlay(null, null);
+                    drawAROverlay([]);
                 }
             } catch (error) {
                 console.error('Error processing frame:', error);
@@ -294,7 +311,7 @@
             } finally {
                 isProcessing = false;
                 // Schedule the next frame processing
-                setTimeout(processFrame, 5000);
+                setTimeout(processFrame, 3000); // Process every 3 seconds
             }
         }
     </script>
