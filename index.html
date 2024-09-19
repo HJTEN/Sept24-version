@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Real-time Landmark Recognition with AR</title>
+    <title>Real-time Landmark and Object Recognition with AR</title>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -61,6 +61,8 @@
     </div>
 
     <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyDmnge0f1XdxLvvBPMW1pJKe5QQmGsKTiQ&libraries=places"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd"></script>
     <script>
         const video = document.getElementById('videoFeed');
         const canvas = document.getElementById('arOverlay');
@@ -70,6 +72,7 @@
         const apiKey = 'YOUR_API_KEY';
         let lastDetectedLandmark = '';
         let isProcessing = false;
+        let cocoSsdModel;
 
         async function startCamera() {
             try {
@@ -101,6 +104,10 @@
             }
         }
 
+        async function loadCocoSsdModel() {
+            cocoSsdModel = await cocoSSD.load();
+        }
+
         async function captureFrame() {
             const tempCanvas = document.createElement('canvas');
             tempCanvas.width = video.videoWidth;
@@ -129,7 +136,12 @@
             }
 
             const data = await response.json();
-            return data.responses[0].landmarkAnnotations;
+            return data.responses[0].landmarkAnnotations || [];
+        }
+
+        async function detectObjectsWithCocoSsd() {
+            if (!cocoSsdModel) return [];
+            return cocoSsdModel.detect(video);
         }
 
         async function fetchLandmarkFacts(landmarkName) {
@@ -149,46 +161,42 @@
         }
 
         function displayFacts(name, facts) {
-            landmarkName.textContent = name;
+            landmarkName.textContent = name || "No landmark detected";
             factsList.innerHTML = '';
-            const sentences = facts.split('. ').filter(s => s.trim().length > 0);
-            const topFacts = sentences.slice(0, 10).map(s => s.trim() + (s.endsWith('.') ? '' : '.'));
-            
-            topFacts.forEach(fact => {
-                const li = document.createElement('li');
-                li.textContent = fact;
-                factsList.appendChild(li);
-            });
+            if (facts) {
+                const sentences = facts.split('. ').filter(s => s.trim().length > 0);
+                const topFacts = sentences.slice(0, 10).map(s => s.trim() + (s.endsWith('.') ? '' : '.'));
+
+                topFacts.forEach(fact => {
+                    const li = document.createElement('li');
+                    li.textContent = fact;
+                    factsList.appendChild(li);
+                });
+            }
         }
 
-        function drawAROverlay(name, location) {
+        function drawAROverlay(name, location, objects) {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Draw landmark info
             ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
             ctx.fillRect(0, 0, canvas.width, 50);
             ctx.fillStyle = 'white';
             ctx.font = '20px Arial';
-            ctx.fillText(name, 10, 35);
+            ctx.fillText(name || "No landmark detected", 10, 35);
             if (location) {
                 ctx.fillText(`Lat: ${location.latitude.toFixed(4)}, Lng: ${location.longitude.toFixed(4)}`, 10, 70);
             }
-        }
 
-        async function getNearbyAttractions(location) {
-            const service = new google.maps.places.PlacesService(document.createElement('div'));
-            const request = {
-                location: new google.maps.LatLng(location.latitude, location.longitude),
-                radius: '1000',
-                type: ['tourist_attraction']
-            };
+            // Draw bounding boxes for detected objects
+            ctx.strokeStyle = 'blue';
+            ctx.lineWidth = 2;
 
-            return new Promise((resolve, reject) => {
-                service.nearbySearch(request, (results, status) => {
-                    if (status === google.maps.places.PlacesServiceStatus.OK) {
-                        resolve(results);
-                    } else {
-                        reject(new Error('Failed to fetch nearby attractions'));
-                    }
-                });
+            objects.forEach(obj => {
+                ctx.beginPath();
+                ctx.rect(obj.bbox[0], obj.bbox[1], obj.bbox[2], obj.bbox[3]);
+                ctx.stroke();
+                ctx.fillText(`${obj.class} (${Math.round(obj.score * 100)}%)`, obj.bbox[0], obj.bbox[1] > 10 ? obj.bbox[1] - 5 : obj.bbox[1] + 15);
             });
         }
 
@@ -198,21 +206,25 @@
 
             try {
                 const imageData = await captureFrame();
-                const landmarks = await detectLandmark(imageData);
+                const landmarksPromise = detectLandmark(imageData);
+                const objectsPromise = detectObjectsWithCocoSsd();
 
-                if (landmarks && landmarks.length > 0) {
+                const [landmarks, objects] = await Promise.all([landmarksPromise, objectsPromise]);
+
+                if (landmarks.length > 0) {
                     const landmark = landmarks[0];
                     if (landmark.score >= 0.5 && landmark.description !== lastDetectedLandmark) {
                         lastDetectedLandmark = landmark.description;
                         const facts = await fetchLandmarkFacts(landmark.description);
                         displayFacts(landmark.description, facts);
-                        drawAROverlay(landmark.description, landmark.locations[0]);
-
-                        const nearbyAttractions = await getNearbyAttractions(landmark.locations[0]);
-                        console.log('Nearby attractions:', nearbyAttractions);
-                        // You can display nearby attractions here
+                        drawAROverlay(landmark.description, landmark.locations[0], objects);
+                    } else {
+                        drawAROverlay(null, null, objects);
                     }
+                } else {
+                    drawAROverlay(null, null, objects);
                 }
+                
             } catch (error) {
                 console.error('Error processing frame:', error);
             } finally {
@@ -221,7 +233,7 @@
         }
 
         startCamera();
-        setInterval(processFrame, 5000); // Process a frame every 5 seconds
+        loadCocoSsdModel().then(() => setInterval(processFrame, 500)); // Process a frame every half second
     </script>
 </body>
 </html>
