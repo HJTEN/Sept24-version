@@ -3,199 +3,53 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Real-time Landmark and Object Recognition with AR</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            margin: 0;
-            padding: 0;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            min-height: 100vh;
-            background-color: #f0f0f0;
-        }
-        .container {
-            position: relative;
-            max-width: 800px;
-            width: 100%;
-            background-color: white;
-            border-radius: 10px;
-            box-shadow: 0 0 10px rgba(0,0,0,0.1);
-            overflow: hidden;
-        }
-        #videoFeed {
-            width: 100%;
-            height: auto;
-            display: block;
-        }
-        #arOverlay {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-        }
-        #facts {
-            padding: 20px;
-            max-height: 300px;
-            overflow-y: auto;
-        }
-        h2 {
-            margin-top: 0;
-        }
-        ul {
-            padding-left: 20px;
-        }
-        #modelStatus {
-            position: fixed;
-            top: 10px;
-            left: 10px;
-            background-color: rgba(0, 0, 0, 0.7);
-            color: white;
-            padding: 5px 10px;
-            border-radius: 5px;
-            z-index: 1000;
-        }
-    </style>
+    <title>COCO-SSD Model Test</title>
 </head>
 <body>
-    <div id="modelStatus">Loading COCO-SSD model...</div>
-    <div class="container">
-        <video id="videoFeed" autoplay playsinline muted></video>
-        <canvas id="arOverlay"></canvas>
-        <div id="facts">
-            <h2>Landmark Facts</h2>
-            <p id="landmarkName"></p>
-            <ul id="factsList"></ul>
-        </div>
-    </div>
+    <div id="status">Loading...</div>
+    <video id="video" autoplay playsinline muted style="display: none;"></video>
 
-    <script src="https://maps.googleapis.com/maps/api/js?key=YOUR_API_KEY&libraries=places"></script>
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd"></script>
     <script>
-        const video = document.getElementById('videoFeed');
-        const canvas = document.getElementById('arOverlay');
-        const ctx = canvas.getContext('2d');
-        const landmarkName = document.getElementById('landmarkName');
-        const factsList = document.getElementById('factsList');
-        const modelStatus = document.getElementById('modelStatus');
-        const apiKey = 'AIzaSyDmnge0f1XdxLvvBPMW1pJKe5QQmGsKTiQ';
-        let lastDetectedLandmark = '';
-        let isProcessing = false;
-        let cocoSsdModel;
+        const statusElement = document.getElementById('status');
+        const video = document.getElementById('video');
 
-        async function startCamera() {
+        async function setupCamera() {
             try {
-                const constraints = {
-                    video: {
-                        facingMode: 'environment',
-                        width: { ideal: 1280 },
-                        height: { ideal: 720 }
-                    }
-                };
-
-                if (/iPhone|iPad|iPod/i.test(navigator.userAgent)) {
-                    constraints.video.facingMode = { exact: "environment" };
-                }
-
-                const stream = await navigator.mediaDevices.getUserMedia(constraints);
+                const stream = await navigator.mediaDevices.getUserMedia({ video: true });
                 video.srcObject = stream;
-                video.onloadedmetadata = () => {
-                    canvas.width = video.videoWidth;
-                    canvas.height = video.videoHeight;
-                };
-
-                await video.play();
-                console.log('Camera started successfully');
+                return new Promise((resolve) => {
+                    video.onloadedmetadata = () => resolve(video);
+                });
             } catch (error) {
-                console.error('Error accessing camera:', error);
-                modelStatus.textContent = 'Error accessing camera';
+                statusElement.textContent = `Camera error: ${error.message}`;
+                throw error;
             }
         }
 
-        async function loadCocoSsdModel() {
+        async function loadModel() {
             try {
-                modelStatus.textContent = 'Loading COCO-SSD model...';
-                cocoSsdModel = await cocoSSD.load();
-                modelStatus.textContent = 'COCO-SSD model loaded successfully';
-                console.log('COCO-SSD model loaded successfully');
+                statusElement.textContent = 'Loading COCO-SSD model...';
+                const model = await cocoSsd.load();
+                statusElement.textContent = 'Model loaded successfully!';
+                return model;
             } catch (error) {
-                modelStatus.textContent = 'Error loading COCO-SSD model';
-                console.error('Error loading COCO-SSD model:', error);
-            }
-        }
-
-        async function detectObjectsWithCocoSsd() {
-            if (!cocoSsdModel) {
-                console.warn('COCO-SSD model not loaded yet');
-                return [];
-            }
-            try {
-                console.log('Starting object detection...');
-                const predictions = await cocoSsdModel.detect(video);
-                console.log('Object detection completed. Results:', predictions);
-                return predictions;
-            } catch (error) {
-                console.error('Error detecting objects:', error);
-                return [];
-            }
-        }
-
-        function drawAROverlay(name, location, objects) {
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-            // Draw landmark info
-            ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
-            ctx.fillRect(0, 0, canvas.width, 50);
-            ctx.fillStyle = 'white';
-            ctx.font = '20px Arial';
-            ctx.fillText(name || "No landmark detected", 10, 35);
-            if (location) {
-                ctx.fillText(`Lat: ${location.latitude.toFixed(4)}, Lng: ${location.longitude.toFixed(4)}`, 10, 70);
-            }
-
-            // Draw bounding boxes for detected objects
-            ctx.strokeStyle = 'blue';
-            ctx.lineWidth = 2;
-            ctx.fillStyle = 'white';
-
-            objects.forEach(obj => {
-                const [x, y, width, height] = obj.bbox;
-                ctx.strokeRect(x, y, width, height);
-                ctx.fillText(`${obj.class} (${Math.round(obj.score * 100)}%)`, x, y > 10 ? y - 5 : y + 15);
-            });
-
-            // Add debug info
-            ctx.fillStyle = 'white';
-            ctx.font = '16px Arial';
-            ctx.fillText(`Objects detected: ${objects.length}`, 10, canvas.height - 20);
-            objects.forEach((obj, index) => {
-                ctx.fillText(`${index + 1}: ${obj.class} (${Math.round(obj.score * 100)}%)`, 10, canvas.height - 40 - (index * 20));
-            });
-        }
-
-        async function processFrame() {
-            if (isProcessing) return;
-            isProcessing = true;
-
-            try {
-                console.log('Processing frame...');
-                const objects = await detectObjectsWithCocoSsd();
-                drawAROverlay(null, null, objects);
-                console.log('Frame processed successfully');
-            } catch (error) {
-                console.error('Error processing frame:', error);
-            } finally {
-                isProcessing = false;
+                statusElement.textContent = `Error loading model: ${error.message}`;
+                console.error('Error loading model:', error);
+                throw error;
             }
         }
 
         async function init() {
-            await startCamera();
-            await loadCocoSsdModel();
-            setInterval(processFrame, 100); // Process a frame every 100ms
+            try {
+                await setupCamera();
+                statusElement.textContent = 'Camera ready. Loading model...';
+                const model = await loadModel();
+                statusElement.textContent = 'Ready! Model and camera initialized.';
+            } catch (error) {
+                console.error('Initialization failed:', error);
+            }
         }
 
         init();
