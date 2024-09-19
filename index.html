@@ -47,9 +47,20 @@
         ul {
             padding-left: 20px;
         }
+        #modelStatus {
+            position: fixed;
+            top: 10px;
+            left: 10px;
+            background-color: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 5px 10px;
+            border-radius: 5px;
+            z-index: 1000;
+        }
     </style>
 </head>
 <body>
+    <div id="modelStatus">Loading COCO-SSD model...</div>
     <div class="container">
         <video id="videoFeed" autoplay playsinline muted></video>
         <canvas id="arOverlay"></canvas>
@@ -60,7 +71,7 @@
         </div>
     </div>
 
-    <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyDmnge0f1XdxLvvBPMW1pJKe5QQmGsKTiQ&libraries=places"></script>
+    <script src="https://maps.googleapis.com/maps/api/js?key=YOUR_API_KEY&libraries=places"></script>
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd"></script>
     <script>
@@ -69,7 +80,8 @@
         const ctx = canvas.getContext('2d');
         const landmarkName = document.getElementById('landmarkName');
         const factsList = document.getElementById('factsList');
-        const apiKey = 'YOUR_API_KEY';
+        const modelStatus = document.getElementById('modelStatus');
+        const apiKey = 'AIzaSyDmnge0f1XdxLvvBPMW1pJKe5QQmGsKTiQ';
         let lastDetectedLandmark = '';
         let isProcessing = false;
         let cocoSsdModel;
@@ -95,83 +107,39 @@
                     canvas.height = video.videoHeight;
                 };
 
-                // iOS Safari requires user interaction to play video
-                video.play().catch(error => {
-                    console.warn("Autoplay was prevented. Please interact with the page to start the video.");
-                });
+                await video.play();
+                console.log('Camera started successfully');
             } catch (error) {
                 console.error('Error accessing camera:', error);
+                modelStatus.textContent = 'Error accessing camera';
             }
         }
 
         async function loadCocoSsdModel() {
-            cocoSsdModel = await cocoSSD.load();
-        }
-
-        async function captureFrame() {
-            const tempCanvas = document.createElement('canvas');
-            tempCanvas.width = video.videoWidth;
-            tempCanvas.height = video.videoHeight;
-            tempCanvas.getContext('2d').drawImage(video, 0, 0);
-            return tempCanvas.toDataURL('image/jpeg', 0.8).split(',')[1];
-        }
-
-        async function detectLandmark(imageData) {
-            const apiUrl = `https://vision.googleapis.com/v1/images:annotate?key=${apiKey}`;
-            const requestBody = {
-                requests: [{
-                    image: { content: imageData },
-                    features: [{ type: 'LANDMARK_DETECTION', maxResults: 1 }]
-                }]
-            };
-
-            const response = await fetch(apiUrl, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(requestBody)
-            });
-
-            if (!response.ok) {
-                throw new Error('Failed to fetch data from Google Vision API');
+            try {
+                modelStatus.textContent = 'Loading COCO-SSD model...';
+                cocoSsdModel = await cocoSSD.load();
+                modelStatus.textContent = 'COCO-SSD model loaded successfully';
+                console.log('COCO-SSD model loaded successfully');
+            } catch (error) {
+                modelStatus.textContent = 'Error loading COCO-SSD model';
+                console.error('Error loading COCO-SSD model:', error);
             }
-
-            const data = await response.json();
-            return data.responses[0].landmarkAnnotations || [];
         }
 
         async function detectObjectsWithCocoSsd() {
-            if (!cocoSsdModel) return [];
-            return cocoSsdModel.detect(video);
-        }
-
-        async function fetchLandmarkFacts(landmarkName) {
-            const apiUrl = `https://en.wikipedia.org/w/api.php?action=query&format=json&prop=extracts&exintro=false&explaintext=true&titles=${encodeURIComponent(landmarkName)}&origin=*`;
-
-            const response = await fetch(apiUrl);
-            if (!response.ok) {
-                throw new Error('Failed to fetch landmark information');
+            if (!cocoSsdModel) {
+                console.warn('COCO-SSD model not loaded yet');
+                return [];
             }
-
-            const data = await response.json();
-            const pages = data.query.pages;
-            const pageId = Object.keys(pages)[0];
-            const page = pages[pageId];
-
-            return page.extract ? page.extract : 'No description available.';
-        }
-
-        function displayFacts(name, facts) {
-            landmarkName.textContent = name || "No landmark detected";
-            factsList.innerHTML = '';
-            if (facts) {
-                const sentences = facts.split('. ').filter(s => s.trim().length > 0);
-                const topFacts = sentences.slice(0, 10).map(s => s.trim() + (s.endsWith('.') ? '' : '.'));
-
-                topFacts.forEach(fact => {
-                    const li = document.createElement('li');
-                    li.textContent = fact;
-                    factsList.appendChild(li);
-                });
+            try {
+                console.log('Starting object detection...');
+                const predictions = await cocoSsdModel.detect(video);
+                console.log('Object detection completed. Results:', predictions);
+                return predictions;
+            } catch (error) {
+                console.error('Error detecting objects:', error);
+                return [];
             }
         }
 
@@ -191,12 +159,20 @@
             // Draw bounding boxes for detected objects
             ctx.strokeStyle = 'blue';
             ctx.lineWidth = 2;
+            ctx.fillStyle = 'white';
 
             objects.forEach(obj => {
-                ctx.beginPath();
-                ctx.rect(obj.bbox[0], obj.bbox[1], obj.bbox[2], obj.bbox[3]);
-                ctx.stroke();
-                ctx.fillText(`${obj.class} (${Math.round(obj.score * 100)}%)`, obj.bbox[0], obj.bbox[1] > 10 ? obj.bbox[1] - 5 : obj.bbox[1] + 15);
+                const [x, y, width, height] = obj.bbox;
+                ctx.strokeRect(x, y, width, height);
+                ctx.fillText(`${obj.class} (${Math.round(obj.score * 100)}%)`, x, y > 10 ? y - 5 : y + 15);
+            });
+
+            // Add debug info
+            ctx.fillStyle = 'white';
+            ctx.font = '16px Arial';
+            ctx.fillText(`Objects detected: ${objects.length}`, 10, canvas.height - 20);
+            objects.forEach((obj, index) => {
+                ctx.fillText(`${index + 1}: ${obj.class} (${Math.round(obj.score * 100)}%)`, 10, canvas.height - 40 - (index * 20));
             });
         }
 
@@ -205,26 +181,10 @@
             isProcessing = true;
 
             try {
-                const imageData = await captureFrame();
-                const landmarksPromise = detectLandmark(imageData);
-                const objectsPromise = detectObjectsWithCocoSsd();
-
-                const [landmarks, objects] = await Promise.all([landmarksPromise, objectsPromise]);
-
-                if (landmarks.length > 0) {
-                    const landmark = landmarks[0];
-                    if (landmark.score >= 0.5 && landmark.description !== lastDetectedLandmark) {
-                        lastDetectedLandmark = landmark.description;
-                        const facts = await fetchLandmarkFacts(landmark.description);
-                        displayFacts(landmark.description, facts);
-                        drawAROverlay(landmark.description, landmark.locations[0], objects);
-                    } else {
-                        drawAROverlay(null, null, objects);
-                    }
-                } else {
-                    drawAROverlay(null, null, objects);
-                }
-                
+                console.log('Processing frame...');
+                const objects = await detectObjectsWithCocoSsd();
+                drawAROverlay(null, null, objects);
+                console.log('Frame processed successfully');
             } catch (error) {
                 console.error('Error processing frame:', error);
             } finally {
@@ -232,8 +192,13 @@
             }
         }
 
-        startCamera();
-        loadCocoSsdModel().then(() => setInterval(processFrame, 500)); // Process a frame every half second
+        async function init() {
+            await startCamera();
+            await loadCocoSsdModel();
+            setInterval(processFrame, 100); // Process a frame every 100ms
+        }
+
+        init();
     </script>
 </body>
 </html>
