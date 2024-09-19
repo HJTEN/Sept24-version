@@ -143,7 +143,7 @@
         async function startExplorer() {
             try {
                 await startCamera();
-                setInterval(processFrame, 5000); // Process a frame every 5 seconds
+                processFrame(); // Start the frame processing loop
             } catch (error) {
                 console.error('Error starting explorer:', error);
                 statusMessage.textContent = 'Error: Unable to start explorer';
@@ -263,7 +263,7 @@
                 const imageData = await captureFrame();
                 const landmarks = await detectLandmark(imageData);
 
-                if (landmarks.length > 0) {
+                if (landmarks && landmarks.length > 0) {
                     const landmark = landmarks[0];
                     if (landmark.score >= 0.5 && landmark.description !== lastDetectedLandmark) {
                         lastDetectedLandmark = landmark.description;
@@ -275,18 +275,22 @@
                         statusMessage.textContent = 'No new landmarks detected';
                     }
                 } else {
-                    statusMessage.textContent = 'No landmarks detected';
+                    statusMessage.textContent = 'No landmarks detected in this frame';
                     drawAROverlay(null, null);
                 }
             } catch (error) {
                 console.error('Error processing frame:', error);
-                statusMessage.textContent = 'Error: Unable to process frame';
+                if (error.message.includes('ZERO_RESULTS')) {
+                    statusMessage.textContent = 'No landmarks detected in this frame';
+                } else {
+                    statusMessage.textContent = `Error: ${error.message || 'Unable to process frame'}`;
+                }
             } finally {
                 isProcessing = false;
+                // Schedule the next frame processing
+                setTimeout(processFrame, 5000);
             }
         }
-
-        // Don't call startCamera() here anymore, it's called from startExplorer()
     </script>
 </body>
 </html>
