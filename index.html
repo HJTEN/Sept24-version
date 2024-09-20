@@ -166,13 +166,16 @@
 
         async function startExplorer() {
             try {
+                console.log('Starting explorer...');
                 await startCamera();
+                console.log('Camera started successfully');
                 
                 if ("geolocation" in navigator) {
                     navigator.geolocation.watchPosition(
                         position => {
                             const { latitude, longitude } = position.coords;
                             locationDisplay.textContent = `Location: ${latitude.toFixed(6)}, ${longitude.toFixed(6)}`;
+                            console.log('Geolocation updated');
                         },
                         error => {
                             console.warn("Geolocation error:", error);
@@ -182,8 +185,10 @@
                     );
                 } else {
                     locationDisplay.textContent = "Location: Unsupported";
+                    console.log('Geolocation not supported');
                 }
                 
+                console.log('Starting frame processing');
                 processFrame();
             } catch (error) {
                 console.error('Error starting explorer:', error);
@@ -193,6 +198,7 @@
 
         async function startCamera() {
             try {
+                console.log('Attempting to start camera...');
                 const constraints = {
                     video: { 
                         facingMode: 'environment', 
@@ -205,11 +211,14 @@
                     constraints.video.facingMode = { exact: "environment" };
                 }
 
+                console.log('Requesting media stream...');
                 const stream = await navigator.mediaDevices.getUserMedia(constraints);
+                console.log('Media stream obtained');
                 video.srcObject = stream;
 
                 return new Promise((resolve) => {
                     video.onloadedmetadata = () => {
+                        console.log('Video metadata loaded');
                         canvas.width = video.videoWidth;
                         canvas.height = video.videoHeight;
                         statusMessage.textContent = 'Camera ready. Detecting landmarks...';
@@ -396,14 +405,4 @@
             const dLon = (lon2 - lon1) * Math.PI / 180;
             const a = 
                 0.5 - Math.cos(dLat)/2 + 
-                Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * 
-                (1 - Math.cos(dLon))/2;
-
-            return (R * 2 * Math.asin(Math.sqrt(a))).toFixed(1) + ' km';
-        }
-
-        function displayNearbyLandmarks(landmarks) {
-            const nearbyList = document.getElementById('nearbyList');
-            nearbyList.innerHTML = '';
-            landmarks.forEach(landmark => {
-                const li = document.createElement('
+                Math.cos(lat1
