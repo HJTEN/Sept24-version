@@ -2,27 +2,55 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Landmark Explorer</title>
     <style>
         body {
             font-family: Arial, sans-serif;
             margin: 0;
             padding: 0;
-            overflow: hidden;
-            background-color: #000;
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh;
+            background-color: #f0f0f0;
+        }
+        .container {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        #landingPage {
+            text-align: center;
+        }
+        #startButton {
+            font-size: 18px;
+            padding: 10px 20px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        #explorerPage {
+            display: none;
+            width: 100%;
+            max-width: 800px;
         }
         #videoContainer {
-            position: fixed;
-            top: 0;
-            left: 0;
+            position: relative;
             width: 100%;
-            height: 100%;
+            background-color: white;
+            border-radius: 10px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+            overflow: hidden;
         }
         #videoFeed {
             width: 100%;
-            height: 100%;
-            object-fit: cover;
+            height: auto;
+            display: block;
         }
         #arOverlay {
             position: absolute;
@@ -31,39 +59,21 @@
             width: 100%;
             height: 100%;
         }
-        #infoContainer {
-            position: absolute;
-            bottom: 0;
-            left: 0;
-            width: 100%;
-            height: 40%;
-            display: flex;
-            transition: transform 0.3s ease-out;
-        }
-        .infoPage {
-            flex: 0 0 100%;
-            background-color: rgba(0, 0, 0, 0.7);
-            color: white;
+        #facts {
             padding: 20px;
+            max-height: 300px;
             overflow-y: auto;
-            box-sizing: border-box;
         }
-        #pagination {
-            position: absolute;
-            bottom: 10px;
-            left: 50%;
-            transform: translateX(-50%);
-            display: flex;
-            gap: 10px;
+        #nearbyAttractions {
+            padding: 20px;
+            max-height: 300px;
+            overflow-y: auto;
         }
-        .paginationDot {
-            width: 10px;
-            height: 10px;
-            border-radius: 50%;
-            background-color: rgba(255, 255, 255, 0.5);
+        h2 {
+            margin-top: 0;
         }
-        .paginationDot.active {
-            background-color: white;
+        ul {
+            padding-left: 20px;
         }
         #statusMessage {
             position: absolute;
@@ -73,27 +83,7 @@
             color: white;
             padding: 5px 10px;
             border-radius: 5px;
-        }
-        h2 {
-            margin-top: 0;
-            font-size: 1.2em;
-        }
-        ul {
-            padding-left: 20px;
-            margin: 0;
-        }
-        #startButton {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            font-size: 18px;
-            padding: 10px 20px;
-            background-color: #4CAF50;
-            color: white;
-            border: none;
-            border-radius: 5px;
-            cursor: pointer;
+            z-index: 1000;
         }
         #locationConsent {
             display: none;
@@ -110,26 +100,29 @@
     </style>
 </head>
 <body>
-    <div id="videoContainer">
-        <video id="videoFeed" autoplay playsinline muted></video>
-        <canvas id="arOverlay"></canvas>
-        <div id="statusMessage">Initializing...</div>
-        <div id="infoContainer">
-            <div id="factsPage" class="infoPage">
-                <h2 id="landmarkName">No landmark detected</h2>
+    <div class="container">
+        <div id="landingPage">
+            <h1>Welcome to Landmark Explorer</h1>
+            <p>Discover landmarks around you in real-time!</p>
+            <button id="startButton">Start Exploring</button>
+        </div>
+        <div id="explorerPage">
+            <div id="videoContainer">
+                <video id="videoFeed" autoplay playsinline muted></video>
+                <canvas id="arOverlay"></canvas>
+                <div id="statusMessage">Initializing...</div>
+            </div>
+            <div id="facts">
+                <h2>Landmark Facts</h2>
+                <p id="landmarkName"></p>
                 <ul id="factsList"></ul>
             </div>
-            <div id="attractionsPage" class="infoPage">
+            <div id="nearbyAttractions">
                 <h2>Nearby Attractions</h2>
                 <ul id="attractionsList"></ul>
             </div>
         </div>
-        <div id="pagination">
-            <div class="paginationDot active"></div>
-            <div class="paginationDot"></div>
-        </div>
     </div>
-    <button id="startButton">Start Exploring</button>
     <div id="locationConsent">
         <h3>Location Permission</h3>
         <p>To show nearby attractions, we need your location. Do you allow us to use your location?</p>
@@ -139,74 +132,40 @@
 
     <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyA4Xo27wNyl5vJXm32137rlFa4VAcc7JJ4&libraries=places"></script>
     <script>
-        const videoFeed = document.getElementById('videoFeed');
-        const arOverlay = document.getElementById('arOverlay');
-        const ctx = arOverlay.getContext('2d');
+        const landingPage = document.getElementById('landingPage');
+        const explorerPage = document.getElementById('explorerPage');
+        const startButton = document.getElementById('startButton');
+        const video = document.getElementById('videoFeed');
+        const canvas = document.getElementById('arOverlay');
+        const ctx = canvas.getContext('2d');
         const landmarkName = document.getElementById('landmarkName');
         const factsList = document.getElementById('factsList');
         const statusMessage = document.getElementById('statusMessage');
-        const startButton = document.getElementById('startButton');
         const locationConsent = document.getElementById('locationConsent');
         const allowLocationButton = document.getElementById('allowLocation');
         const denyLocationButton = document.getElementById('denyLocation');
         const attractionsList = document.getElementById('attractionsList');
-        const infoContainer = document.getElementById('infoContainer');
-        const paginationDots = document.querySelectorAll('.paginationDot');
-
+        
         let lastDetectedLandmark = '';
         let isProcessing = false;
         let userLocation = null;
-        let currentPage = 0;
 
         startButton.addEventListener('click', () => {
-            startButton.style.display = 'none';
+            landingPage.style.display = 'none';
             locationConsent.style.display = 'block';
         });
 
         allowLocationButton.addEventListener('click', () => {
             locationConsent.style.display = 'none';
+            explorerPage.style.display = 'block';
             startExplorer(true);
         });
 
         denyLocationButton.addEventListener('click', () => {
             locationConsent.style.display = 'none';
+            explorerPage.style.display = 'block';
             startExplorer(false);
         });
-
-        infoContainer.addEventListener('touchstart', handleTouchStart, false);
-        infoContainer.addEventListener('touchmove', handleTouchMove, false);
-
-        let xDown = null;
-
-        function handleTouchStart(evt) {
-            xDown = evt.touches[0].clientX;
-        }
-
-        function handleTouchMove(evt) {
-            if (!xDown) return;
-            
-            let xUp = evt.touches[0].clientX;
-            let xDiff = xDown - xUp;
-
-            if (Math.abs(xDiff) > 50) {
-                if (xDiff > 0) {
-                    // Swipe left
-                    currentPage = Math.min(currentPage + 1, 1);
-                } else {
-                    // Swipe right
-                    currentPage = Math.max(currentPage - 1, 0);
-                }
-                updateInfoContainer();
-            }
-            xDown = null;
-        }
-
-        function updateInfoContainer() {
-            infoContainer.style.transform = `translateX(-${currentPage * 100}%)`;
-            paginationDots.forEach((dot, index) => {
-                dot.classList.toggle('active', index === currentPage);
-            });
-        }
 
         async function startExplorer(useLocation) {
             try {
@@ -227,13 +186,13 @@
                     video: { facingMode: 'environment' }
                 };
                 const stream = await navigator.mediaDevices.getUserMedia(constraints);
-                videoFeed.srcObject = stream;
+                video.srcObject = stream;
                 return new Promise((resolve) => {
-                    videoFeed.onloadedmetadata = () => {
-                        arOverlay.width = videoFeed.videoWidth;
-                        arOverlay.height = videoFeed.videoHeight;
+                    video.onloadedmetadata = () => {
+                        canvas.width = video.videoWidth;
+                        canvas.height = video.videoHeight;
                         statusMessage.textContent = 'Camera ready. Detecting landmarks...';
-                        resolve(videoFeed);
+                        resolve(video);
                     };
                 });
             } catch (error) {
@@ -264,9 +223,9 @@
 
         async function captureFrame() {
             const tempCanvas = document.createElement('canvas');
-            tempCanvas.width = videoFeed.videoWidth;
-            tempCanvas.height = videoFeed.videoHeight;
-            tempCanvas.getContext('2d').drawImage(videoFeed, 0, 0);
+            tempCanvas.width = video.videoWidth;
+            tempCanvas.height = video.videoHeight;
+            tempCanvas.getContext('2d').drawImage(video, 0, 0);
             return tempCanvas.toDataURL('image/jpeg', 0.8).split(',')[1];
         }
 
@@ -326,10 +285,10 @@
         }
 
         function drawAROverlay(name, location) {
-            ctx.clearRect(0, 0, arOverlay.width, arOverlay.height);
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
 
             ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
-            ctx.fillRect(0, 0, arOverlay.width, 50);
+            ctx.fillRect(0, 0, canvas.width, 50);
             ctx.fillStyle = 'white';
             ctx.font = '20px Arial';
             ctx.fillText(name || "No landmark detected", 10, 35);
@@ -402,3 +361,17 @@
                         drawAROverlay(landmark.description, landmark.locations[0]);
                     }
                 } else {
+                    statusMessage.textContent = 'No landmarks detected';
+                    drawAROverlay(null, null);
+                }
+            } catch (error) {
+                console.error('Error processing frame:', error);
+                statusMessage.textContent = 'Error: Unable to process frame';
+            } finally {
+                isProcessing = false;
+                setTimeout(processFrame, 5000);
+            }
+        }
+    </script>
+</body>
+</html>
