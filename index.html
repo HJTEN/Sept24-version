@@ -91,6 +91,16 @@
             border-radius: 5px;
             z-index: 1000;
         }
+        #locationDisplay {
+            position: absolute;
+            bottom: 10px;
+            left: 10px;
+            background-color: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 5px 10px;
+            border-radius: 5px;
+            z-index: 1000;
+        }
     </style>
 </head>
 <body>
@@ -105,6 +115,7 @@
                 <video id="videoFeed" autoplay playsinline muted></video>
                 <canvas id="arOverlay"></canvas>
                 <div id="statusMessage">Initializing...</div>
+                <div id="locationDisplay">Location: Unavailable</div>
             </div>
             <div id="facts">
                 <h2>Landmark Facts</h2>
@@ -130,6 +141,7 @@
         const landmarkName = document.getElementById('landmarkName');
         const factsList = document.getElementById('factsList');
         const statusMessage = document.getElementById('statusMessage');
+        const locationDisplay = document.getElementById('locationDisplay');
         
         let lastDetectedLandmarks = [];
         let isProcessing = false;
@@ -143,6 +155,24 @@
         async function startExplorer() {
             try {
                 await startCamera();
+                
+                // Request geolocation permission and start watching location
+                if ("geolocation" in navigator) {
+                    navigator.geolocation.watchPosition(
+                        position => {
+                            const { latitude, longitude } = position.coords;
+                            locationDisplay.textContent = `Location: ${latitude.toFixed(6)}, ${longitude.toFixed(6)}`;
+                        },
+                        error => {
+                            console.warn("Geolocation error:", error);
+                            locationDisplay.textContent = "Location: Unavailable";
+                        },
+                        { enableHighAccuracy: true, maximumAge: 30000, timeout: 27000 }
+                    );
+                } else {
+                    locationDisplay.textContent = "Location: Unsupported";
+                }
+                
                 processFrame(); // Start the frame processing loop
             } catch (error) {
                 console.error('Error starting explorer:', error);
@@ -182,6 +212,27 @@
             }
         }
 
+        function getUserLocation() {
+            return new Promise((resolve, reject) => {
+                if ("geolocation" in navigator) {
+                    navigator.geolocation.getCurrentPosition(
+                        position => {
+                            const { latitude, longitude } = position.coords;
+                            locationDisplay.textContent = `Location: ${latitude.toFixed(6)}, ${longitude.toFixed(6)}`;
+                            resolve(position.coords);
+                        },
+                        error => {
+                            locationDisplay.textContent = "Location: Unavailable";
+                            reject(error);
+                        }
+                    );
+                } else {
+                    locationDisplay.textContent = "Location: Unsupported";
+                    reject(new Error("Geolocation is not supported by this browser."));
+                }
+            });
+        }
+
         async function captureFrame() {
             const tempCanvas = document.createElement('canvas');
             tempCanvas.width = video.videoWidth;
@@ -190,12 +241,18 @@
             return tempCanvas.toDataURL('image/jpeg', 0.8).split(',')[1];
         }
 
-        async function detectLandmark(imageData) {
+        async function detectLandmark(imageData, latitude, longitude) {
             const apiUrl = `https://vision.googleapis.com/v1/images:annotate?key=AIzaSyA4Xo27wNyl5vJXm32137rlFa4VAcc7JJ4`;
             const requestBody = {
                 requests: [{
                     image: { content: imageData },
-                    features: [{ type: 'LANDMARK_DETECTION', maxResults: 5 }]
+                    features: [{ type: 'LANDMARK_DETECTION', maxResults: 5 }],
+                    imageContext: {
+                        latLongRect: {
+                            minLatLng: { latitude: latitude - 0.1, longitude: longitude - 0.1 },
+                            maxLatLng: { latitude: latitude + 0.1, longitude: longitude + 0.1 }
+                        }
+                    }
                 }]
             };
 
@@ -276,7 +333,18 @@
             try {
                 statusMessage.textContent = 'Detecting landmarks...';
                 const imageData = await captureFrame();
-                const landmarks = await detectLandmark(imageData);
+                
+                let latitude, longitude;
+                try {
+                    const location = await getUserLocation();
+                    latitude = location.latitude;
+                    longitude = location.longitude;
+                    console.log(`User location: ${latitude}, ${longitude}`);
+                } catch (error) {
+                    console.warn('Unable to get user location:', error);
+                }
+
+                const landmarks = await detectLandmark(imageData, latitude, longitude);
 
                 if (landmarks && landmarks.length > 0) {
                     statusMessage.textContent = 'Landmarks detected: ';
@@ -310,7 +378,6 @@
                 }
             } finally {
                 isProcessing = false;
-                // Schedule the next frame processing
                 setTimeout(processFrame, 3000); // Process every 3 seconds
             }
         }
