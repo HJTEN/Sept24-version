@@ -4,94 +4,77 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Landmark Explorer</title>
-
-    <!-- Google Fonts -->
-    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
-
-    <!-- Font Awesome for Icons -->
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" rel="stylesheet">
-
     <style>
-        :root {
-            --primary-color: #4CAF50;
-            --secondary-color: #2c3e50;
-            --background-color: #f9f9f9;
-            --text-color: #333;
-        }
-
         body {
-            font-family: 'Roboto', sans-serif;
-            background-color: var(--background-color);
-            color: var(--text-color);
+            font-family: Arial, sans-serif;
             margin: 0;
             padding: 0;
             display: flex;
             flex-direction: column;
             min-height: 100vh;
+            background-color: #f0f0f0;
         }
-
         .container {
+            flex: 1;
             display: flex;
             flex-direction: column;
-            min-height: 100vh;
-        }
-
-        #landingPage {
-            background-image: url('your-image.jpg');
-            background-size: cover;
-            background-position: center;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
             align-items: center;
-            height: 100vh;
-            text-align: center;
-            color: white;
+            justify-content: center;
+            padding: 20px;
         }
-
+        #landingPage {
+            text-align: center;
+        }
         #startButton {
             font-size: 18px;
-            padding: 15px 30px;
-            background-color: var(--primary-color);
+            padding: 10px 20px;
+            background-color: #4CAF50;
             color: white;
             border: none;
-            border-radius: 30px;
+            border-radius: 5px;
             cursor: pointer;
-            display: inline-flex;
-            align-items: center;
-            transition: background-color 0.3s ease;
         }
-
         #explorerPage {
             display: none;
-            padding: 20px;
-            flex: 1;
+            width: 100%;
+            max-width: 800px;
         }
-
         #videoContainer {
             position: relative;
             width: 100%;
             background-color: white;
             border-radius: 10px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
             overflow: hidden;
-            margin-bottom: 20px;
         }
-
         #videoFeed {
             width: 100%;
             height: auto;
             display: block;
         }
-
         #arOverlay {
             position: absolute;
             top: 0;
             left: 0;
             width: 100%;
             height: 100%;
-            pointer-events: none;
         }
-
+        #facts {
+            padding: 20px;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        #nearbyAttractions {
+            padding: 20px;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        h2 {
+            margin-top: 0;
+        }
+        ul {
+            padding-left: 20px;
+        }
         #statusMessage {
             position: absolute;
             top: 10px;
@@ -100,54 +83,19 @@
             color: white;
             padding: 5px 10px;
             border-radius: 5px;
+            z-index: 1000;
         }
-
-        #facts, #nearbyAttractions {
-            padding: 20px;
-            background-color: white;
-            border-radius: 10px;
-            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
-            margin-bottom: 20px;
-            max-height: 200px;
-            overflow-y: auto;
-        }
-
-        h2 {
-            margin-top: 0;
-        }
-
-        ul {
-            padding-left: 20px;
-        }
-
-        .attraction {
-            display: flex;
-            justify-content: space-between;
-            padding: 10px 0;
-            border-bottom: 1px solid #ddd;
-        }
-
-        .attraction:last-child {
-            border-bottom: none;
-        }
-
-        #locationError {
+        #locationConsent {
             display: none;
-            color: red;
-            text-align: center;
-            margin-top: 20px;
-        }
-
-        #darkModeToggle {
             position: fixed;
-            top: 20px;
-            right: 20px;
-            background-color: var(--primary-color);
-            border: none;
-            padding: 10px;
-            border-radius: 5px;
-            color: white;
-            cursor: pointer;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background-color: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.3);
+            z-index: 2000;
         }
     </style>
 </head>
@@ -156,15 +104,13 @@
         <div id="landingPage">
             <h1>Welcome to Landmark Explorer</h1>
             <p>Discover landmarks around you in real-time!</p>
-            <button id="startButton"><i class="fas fa-compass"></i> Start Exploring</button>
+            <button id="startButton">Start Exploring</button>
         </div>
         <div id="explorerPage">
             <div id="videoContainer">
                 <video id="videoFeed" autoplay playsinline muted></video>
                 <canvas id="arOverlay"></canvas>
-                <div id="statusMessage">
-                    <p>Initializing...</p>
-                </div>
+                <div id="statusMessage">Initializing...</div>
             </div>
             <div id="facts">
                 <h2>Landmark Facts</h2>
@@ -175,120 +121,104 @@
                 <h2>Nearby Attractions</h2>
                 <ul id="attractionsList"></ul>
             </div>
-            <p id="locationError">Location access is required to show nearby attractions.</p>
         </div>
-        <button id="darkModeToggle">Toggle Dark Mode</button>
+    </div>
+    <div id="locationConsent">
+        <h3>Location Permission</h3>
+        <p>To show nearby attractions, we need your location. Do you allow us to use your location?</p>
+        <button id="allowLocation">Allow</button>
+        <button id="denyLocation">Deny</button>
     </div>
 
+    <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyA4Xo27wNyl5vJXm32137rlFa4VAcc7JJ4&libraries=places"></script>
     <script>
         const landingPage = document.getElementById('landingPage');
         const explorerPage = document.getElementById('explorerPage');
         const startButton = document.getElementById('startButton');
-        const statusMessage = document.getElementById('statusMessage');
-        const locationError = document.getElementById('locationError');
-        const attractionsList = document.getElementById('attractionsList');
-        const factsList = document.getElementById('factsList');
-        const landmarkName = document.getElementById('landmarkName');
-        const darkModeToggle = document.getElementById('darkModeToggle');
         const video = document.getElementById('videoFeed');
         const canvas = document.getElementById('arOverlay');
         const ctx = canvas.getContext('2d');
-        let userLocation = null;
+        const landmarkName = document.getElementById('landmarkName');
+        const factsList = document.getElementById('factsList');
+        const statusMessage = document.getElementById('statusMessage');
+        const locationConsent = document.getElementById('locationConsent');
+        const allowLocationButton = document.getElementById('allowLocation');
+        const denyLocationButton = document.getElementById('denyLocation');
+        const attractionsList = document.getElementById('attractionsList');
+        
         let lastDetectedLandmark = '';
         let isProcessing = false;
+        let userLocation = null;
 
-        // Start the application and request location
-        startButton.addEventListener('click', async () => {
+        startButton.addEventListener('click', () => {
             landingPage.style.display = 'none';
+            locationConsent.style.display = 'block';
+        });
+
+        allowLocationButton.addEventListener('click', () => {
+            locationConsent.style.display = 'none';
             explorerPage.style.display = 'block';
+            startExplorer(true);
+        });
+
+        denyLocationButton.addEventListener('click', () => {
+            locationConsent.style.display = 'none';
+            explorerPage.style.display = 'block';
+            startExplorer(false);
+        });
+
+        async function startExplorer(useLocation) {
             try {
-                await getUserLocation(); // Get the user's location
-                startExplorer();
-            } catch (error) {
-                showError("Location permission is required to explore nearby attractions.");
-            }
-        });
-
-        // Dark Mode Toggle
-        darkModeToggle.addEventListener('click', () => {
-            document.body.classList.toggle('dark-mode');
-        });
-
-        // Get User's Location with Error Handling
-        async function getUserLocation() {
-            return new Promise((resolve, reject) => {
-                if (navigator.geolocation) {
-                    navigator.geolocation.getCurrentPosition(
-                        (position) => {
-                            userLocation = {
-                                lat: position.coords.latitude,
-                                lng: position.coords.longitude
-                            };
-                            resolve(userLocation);
-                        },
-                        (error) => {
-                            reject(new Error("Location permission denied or unavailable."));
-                        },
-                        { timeout: 10000 } // Timeout after 10 seconds
-                    );
-                } else {
-                    reject(new Error("Geolocation is not supported by this browser."));
+                await startCamera();
+                if (useLocation) {
+                    await getUserLocation();
                 }
-            });
-        }
-
-        // Start Explorer after Location is Acquired
-        async function startExplorer() {
-            statusMessage.textContent = 'Camera ready. Detecting landmarks...';
-            await startCamera();
-            processFrame();
-            fetchNearbyAttractions();
+                processFrame();
+            } catch (error) {
+                console.error('Error starting explorer:', error);
+                statusMessage.textContent = 'Error: Unable to start explorer';
+            }
         }
 
         async function startCamera() {
             try {
-                const constraints = { video: { facingMode: 'environment' } };
+                const constraints = {
+                    video: { facingMode: 'environment' }
+                };
                 const stream = await navigator.mediaDevices.getUserMedia(constraints);
                 video.srcObject = stream;
                 return new Promise((resolve) => {
                     video.onloadedmetadata = () => {
                         canvas.width = video.videoWidth;
                         canvas.height = video.videoHeight;
+                        statusMessage.textContent = 'Camera ready. Detecting landmarks...';
                         resolve(video);
                     };
                 });
             } catch (error) {
-                showError("Camera access is required for landmark detection.");
+                console.error('Error accessing camera:', error);
+                statusMessage.textContent = 'Error: Unable to access camera';
+                throw error;
             }
         }
 
-        async function processFrame() {
-            if (isProcessing) return;
-            isProcessing = true;
-            try {
-                const imageData = await captureFrame();
-                const landmarks = await detectLandmark(imageData);
-
-                if (landmarks.length > 0) {
-                    const landmark = landmarks[0];
-                    if (landmark.score >= 0.5 && landmark.description !== lastDetectedLandmark) {
-                        lastDetectedLandmark = landmark.description;
-                        statusMessage.textContent = `Detected: ${landmark.description}`;
-                        const facts = await fetchLandmarkFacts(landmark.description);
-                        displayFacts(landmark.description, facts);
-                        drawAROverlay(landmark.description);
+        async function getUserLocation() {
+            return new Promise((resolve, reject) => {
+                navigator.geolocation.getCurrentPosition(
+                    (position) => {
+                        userLocation = {
+                            lat: position.coords.latitude,
+                            lng: position.coords.longitude
+                        };
+                        resolve(userLocation);
+                        fetchNearbyAttractions();
+                    },
+                    (error) => {
+                        console.error('Error getting user location:', error);
+                        reject(error);
                     }
-                } else {
-                    statusMessage.textContent = 'No landmarks detected';
-                    drawAROverlay(null);
-                }
-            } catch (error) {
-                console.error('Error processing frame:', error);
-                statusMessage.textContent = 'Error: Unable to process frame';
-            } finally {
-                isProcessing = false;
-                setTimeout(processFrame, 5000); // Repeat every 5 seconds
-            }
+                );
+            });
         }
 
         async function captureFrame() {
@@ -341,7 +271,7 @@
         function displayFacts(name, facts) {
             landmarkName.textContent = name || "No landmark detected";
             factsList.innerHTML = '';
-
+            
             if (facts) {
                 const sentences = facts.split('. ').filter(s => s.trim().length > 0);
                 const topFacts = sentences.slice(0, 5).map(s => s.trim() + (s.endsWith('.') ? '' : '.'));
@@ -354,23 +284,21 @@
             }
         }
 
-        function drawAROverlay(name) {
+        function drawAROverlay(name, location) {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-            ctx.fillStyle = 'rgba(44, 62, 80, 0.8)';
-            ctx.fillRect(10, 10, canvas.width - 20, 50); // Top bar for landmark info
-
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+            ctx.fillRect(0, 0, canvas.width, 50);
             ctx.fillStyle = 'white';
-            ctx.font = '20px Roboto';
-            ctx.fillText(name || "No landmark detected", 20, 40); // Show landmark name
+            ctx.font = '20px Arial';
+            ctx.fillText(name || "No landmark detected", 10, 35);
+            if (location) {
+                ctx.fillText(`Lat: ${location.latitude.toFixed(4)}, Lng: ${location.longitude.toFixed(4)}`, 10, 70);
+            }
         }
 
-        // Fetch and Display Nearby Attractions
-        function fetchNearbyAttractions() {
-            if (!userLocation) {
-                showError("Unable to get location.");
-                return;
-            }
+        async function fetchNearbyAttractions() {
+            if (!userLocation) return;
 
             const service = new google.maps.places.PlacesService(document.createElement('div'));
             const request = {
@@ -381,53 +309,69 @@
 
             service.nearbySearch(request, (results, status) => {
                 if (status === google.maps.places.PlacesServiceStatus.OK) {
-                    displayNearbyAttractions(results);
-                } else {
-                    showError("Unable to fetch nearby attractions.");
+                    displayNearbyAttractions(results.slice(0, 5));
                 }
             });
         }
 
-        // Display Nearby Attractions in List
         function displayNearbyAttractions(attractions) {
             attractionsList.innerHTML = '';
             attractions.forEach(attraction => {
-                const distance = calculateDistance(userLocation.lat, userLocation.lng, attraction.geometry.location.lat(), attraction.geometry.location.lng());
                 const li = document.createElement('li');
-                li.classList.add('attraction');
-                li.innerHTML = `
-                    <span>${attraction.name}</span>
-                    <span>${distance.toFixed(2)} km</span>
-                `;
+                const distance = calculateDistance(userLocation.lat, userLocation.lng, attraction.geometry.location.lat(), attraction.geometry.location.lng());
+                li.textContent = `${attraction.name} (${distance.toFixed(2)} km)`;
                 attractionsList.appendChild(li);
             });
         }
 
-        // Display Errors in the Location Error Element
-        function showError(message) {
-            locationError.style.display = 'block';
-            locationError.textContent = message;
-        }
-
-        // Calculate Distance Between Two Locations (Haversine Formula)
         function calculateDistance(lat1, lon1, lat2, lon2) {
             const R = 6371; // Radius of the earth in km
-            const dLat = deg2rad(lat2 - lat1);
-            const dLon = deg2rad(lon2 - lon1);
-            const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-                      Math.cos(deg2rad(lat1)) * Math.cos(deg2rad(lat2)) *
-                      Math.sin(dLon / 2) * Math.sin(dLon / 2);
-            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-            return R * c; // Distance in km
+            const dLat = deg2rad(lat2-lat1);
+            const dLon = deg2rad(lon2-lon1); 
+            const a = 
+                Math.sin(dLat/2) * Math.sin(dLat/2) +
+                Math.cos(deg2rad(lat1)) * Math.cos(deg2rad(lat2)) * 
+                Math.sin(dLon/2) * Math.sin(dLon/2)
+            ; 
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)); 
+            const d = R * c; // Distance in km
+            return d;
         }
 
         function deg2rad(deg) {
-            return deg * (Math.PI / 180);
+            return deg * (Math.PI/180);
+        }
+
+        async function processFrame() {
+            if (isProcessing) return;
+            isProcessing = true;
+
+            try {
+                statusMessage.textContent = 'Detecting landmarks...';
+                const imageData = await captureFrame();
+                const landmarks = await detectLandmark(imageData);
+
+                if (landmarks.length > 0) {
+                    const landmark = landmarks[0];
+                    if (landmark.score >= 0.5 && landmark.description !== lastDetectedLandmark) {
+                        lastDetectedLandmark = landmark.description;
+                        statusMessage.textContent = `Detected: ${landmark.description}`;
+                        const facts = await fetchLandmarkFacts(landmark.description);
+                        displayFacts(landmark.description, facts);
+                        drawAROverlay(landmark.description, landmark.locations[0]);
+                    }
+                } else {
+                    statusMessage.textContent = 'No landmarks detected';
+                    drawAROverlay(null, null);
+                }
+            } catch (error) {
+                console.error('Error processing frame:', error);
+                statusMessage.textContent = 'Error: Unable to process frame';
+            } finally {
+                isProcessing = false;
+                setTimeout(processFrame, 5000);
+            }
         }
     </script>
-
-    <!-- Google Maps API and Vision API -->
-    <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyA4Xo27wNyl5vJXm32137rlFa4VAcc7JJ4&libraries=places"></script>
 </body>
 </html>
-
