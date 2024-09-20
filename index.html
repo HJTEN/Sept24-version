@@ -64,10 +64,18 @@
             max-height: 300px;
             overflow-y: auto;
         }
+        #nearbyLandmarks {
+            padding: 20px;
+            max-height: 200px;
+            overflow-y: auto;
+        }
         h2 {
             margin-top: 0;
         }
         ul {
+            padding-left: 20px;
+        }
+        #nearbyList {
             padding-left: 20px;
         }
         #navbar {
@@ -122,6 +130,10 @@
                 <p id="landmarkName"></p>
                 <ul id="factsList"></ul>
             </div>
+            <div id="nearbyLandmarks">
+                <h2>Nearby Landmarks</h2>
+                <ul id="nearbyList"></ul>
+            </div>
         </div>
     </div>
     <div id="navbar">
@@ -156,7 +168,6 @@
             try {
                 await startCamera();
                 
-                // Request geolocation permission and start watching location
                 if ("geolocation" in navigator) {
                     navigator.geolocation.watchPosition(
                         position => {
@@ -173,7 +184,7 @@
                     locationDisplay.textContent = "Location: Unsupported";
                 }
                 
-                processFrame(); // Start the frame processing loop
+                processFrame();
             } catch (error) {
                 console.error('Error starting explorer:', error);
                 statusMessage.textContent = 'Error: Unable to start explorer';
@@ -292,19 +303,47 @@
             return page.extract ? page.extract : 'No description available.';
         }
 
-        function displayFacts(name, facts) {
+        async function getTicketInfo(landmarkName) {
+            // In a real application, this would query a ticket API or database
+            // For now, we'll return a mock result for demonstration purposes
+            return new Promise(resolve => setTimeout(() => {
+                if (Math.random() > 0.5) {
+                    resolve({
+                        available: true,
+                        url: `https://example.com/tickets/${encodeURIComponent(landmarkName)}`
+                    });
+                } else {
+                    resolve({ available: false });
+                }
+            }, 500));
+        }
+
+        async function displayFacts(name, facts) {
             landmarkName.textContent = name || "No landmark detected";
             factsList.innerHTML = '';
             
             if (facts) {
                 const sentences = facts.split('. ').filter(s => s.trim().length > 0);
-                const topFacts = sentences.slice(0, 10).map(s => s.trim() + (s.endsWith('.') ? '' : '.'));
+                const topFacts = sentences.slice(0, 5).map(s => s.trim() + (s.endsWith('.') ? '' : '.'));
 
                 topFacts.forEach(fact => {
                     const li = document.createElement('li');
                     li.textContent = fact;
                     factsList.appendChild(li);
                 });
+
+                // Add ticket information
+                const ticketInfo = await getTicketInfo(name);
+                if (ticketInfo.available) {
+                    const ticketLi = document.createElement('li');
+                    const ticketLink = document.createElement('a');
+                    ticketLink.href = ticketInfo.url;
+                    ticketLink.target = '_blank';
+                    ticketLink.textContent = 'Buy tickets';
+                    ticketLi.appendChild(document.createTextNode('Tickets available: '));
+                    ticketLi.appendChild(ticketLink);
+                    factsList.appendChild(ticketLi);
+                }
             }
         }
 
@@ -326,61 +365,45 @@
             });
         }
 
-        async function processFrame() {
-            if (isProcessing) return;
-            isProcessing = true;
+        async function getNearbyLandmarks(latitude, longitude) {
+            const apiKey = 'AIzaSyA4Xo27wNyl5vJXm32137rlFa4VAcc7JJ4'; // Replace with your actual Google API key
+            const radius = 5000; // Search within 5 km radius
+            const type = 'tourist_attraction'; // Filter by tourist attractions
+
+            const apiUrl = `https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=${latitude},${longitude}&radius=${radius}&type=${type}&key=${apiKey}`;
 
             try {
-                statusMessage.textContent = 'Detecting landmarks...';
-                const imageData = await captureFrame();
-                
-                let latitude, longitude;
-                try {
-                    const location = await getUserLocation();
-                    latitude = location.latitude;
-                    longitude = location.longitude;
-                    console.log(`User location: ${latitude}, ${longitude}`);
-                } catch (error) {
-                    console.warn('Unable to get user location:', error);
+                const response = await fetch(apiUrl);
+                if (!response.ok) {
+                    throw new Error('Failed to fetch nearby landmarks');
                 }
 
-                const landmarks = await detectLandmark(imageData, latitude, longitude);
-
-                if (landmarks && landmarks.length > 0) {
-                    statusMessage.textContent = 'Landmarks detected: ';
-                    const newLandmarks = landmarks.filter(landmark => 
-                        landmark.score >= 0.3 && !lastDetectedLandmarks.includes(landmark.description)
-                    );
-
-                    for (const landmark of newLandmarks) {
-                        lastDetectedLandmarks.push(landmark.description);
-                        statusMessage.textContent += `${landmark.description}; `;
-                        const facts = await fetchLandmarkFacts(landmark.description);
-                        displayFacts(landmark.description, facts);
-                    }
-
-                    drawAROverlay(landmarks);
-
-                    // Keep only the last 5 detected landmarks
-                    if (lastDetectedLandmarks.length > 5) {
-                        lastDetectedLandmarks = lastDetectedLandmarks.slice(-5);
-                    }
-                } else {
-                    statusMessage.textContent = 'No landmarks detected in this frame';
-                    drawAROverlay([]);
-                }
+                const data = await response.json();
+                return data.results.map(place => ({
+                    name: place.name,
+                    distance: calculateDistance(latitude, longitude, place.geometry.location.lat, place.geometry.location.lng),
+                    location: place.geometry.location
+                }));
             } catch (error) {
-                console.error('Error processing frame:', error);
-                if (error.message.includes('Failed to fetch data from Google Vision API')) {
-                    statusMessage.textContent = 'Error: Unable to connect to landmark detection service. Please check your internet connection and API key.';
-                } else {
-                    statusMessage.textContent = `Error: ${error.message || 'Unable to process frame'}`;
-                }
-            } finally {
-                isProcessing = false;
-                setTimeout(processFrame, 3000); // Process every 3 seconds
+                console.error('Error fetching nearby landmarks:', error);
+                return [];
             }
         }
-    </script>
-</body>
-</html>
+
+        function calculateDistance(lat1, lon1, lat2, lon2) {
+            const R = 6371; // Radius of the Earth in km
+            const dLat = (lat2 - lat1) * Math.PI / 180;
+            const dLon = (lon2 - lon1) * Math.PI / 180;
+            const a = 
+                0.5 - Math.cos(dLat)/2 + 
+                Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * 
+                (1 - Math.cos(dLon))/2;
+
+            return (R * 2 * Math.asin(Math.sqrt(a))).toFixed(1) + ' km';
+        }
+
+        function displayNearbyLandmarks(landmarks) {
+            const nearbyList = document.getElementById('nearbyList');
+            nearbyList.innerHTML = '';
+            landmarks.forEach(landmark => {
+                const li = document.createElement('
