@@ -64,30 +64,11 @@
             max-height: 300px;
             overflow-y: auto;
         }
-        #nearbyLandmarks {
-            padding: 20px;
-            max-height: 200px;
-            overflow-y: auto;
-        }
         h2 {
             margin-top: 0;
         }
         ul {
             padding-left: 20px;
-        }
-        #nearbyList {
-            padding-left: 20px;
-        }
-        #navbar {
-            display: flex;
-            justify-content: space-around;
-            background-color: #333;
-            padding: 10px 0;
-        }
-        #navbar a {
-            color: white;
-            text-decoration: none;
-            padding: 5px 10px;
         }
         #statusMessage {
             position: absolute;
@@ -130,19 +111,9 @@
                 <p id="landmarkName"></p>
                 <ul id="factsList"></ul>
             </div>
-            <div id="nearbyLandmarks">
-                <h2>Nearby Landmarks</h2>
-                <ul id="nearbyList"></ul>
-            </div>
         </div>
     </div>
-    <div id="navbar">
-        <a href="#home">Home</a>
-        <a href="#recent">Recent Locations</a>
-        <a href="#settings">Settings</a>
-    </div>
 
-    <script async defer src="https://maps.googleapis.com/maps/api/js?key=AIzaSyA4Xo27wNyl5vJXm32137rlFa4VAcc7JJ4&libraries=places&callback=initMap"></script>
     <script>
         const landingPage = document.getElementById('landingPage');
         const explorerPage = document.getElementById('explorerPage');
@@ -157,11 +128,6 @@
         
         let lastDetectedLandmarks = [];
         let isProcessing = false;
-
-        function initMap() {
-            console.log('Google Maps API loaded');
-            // You can initialize any map-related functionality here
-        }
 
         startButton.addEventListener('click', () => {
             console.log('Start button clicked');
@@ -337,24 +303,6 @@
             }
         }
 
-        async function getTicketInfo(landmarkName) {
-            console.log('getTicketInfo function called for:', landmarkName);
-            // In a real application, this would query a ticket API or database
-            // For now, we'll return a mock result for demonstration purposes
-            return new Promise(resolve => setTimeout(() => {
-                if (Math.random() > 0.5) {
-                    console.log('Ticket information available');
-                    resolve({
-                        available: true,
-                        url: `https://example.com/tickets/${encodeURIComponent(landmarkName)}`
-                    });
-                } else {
-                    console.log('No ticket information available');
-                    resolve({ available: false });
-                }
-            }, 500));
-        }
-
         async function displayFacts(name, facts) {
             console.log('displayFacts function called for:', name);
             landmarkName.textContent = name || "No landmark detected";
@@ -369,19 +317,6 @@
                     li.textContent = fact;
                     factsList.appendChild(li);
                 });
-
-                // Add ticket information
-                const ticketInfo = await getTicketInfo(name);
-                if (ticketInfo.available) {
-                    const ticketLi = document.createElement('li');
-                    const ticketLink = document.createElement('a');
-                    ticketLink.href = ticketInfo.url;
-                    ticketLink.target = '_blank';
-                    ticketLink.textContent = 'Buy tickets';
-                    ticketLi.appendChild(document.createTextNode('Tickets available: '));
-                    ticketLi.appendChild(ticketLink);
-                    factsList.appendChild(ticketLi);
-                }
             }
             console.log('Facts displayed');
         }
@@ -400,4 +335,63 @@
                 ctx.font = '20px Arial';
                 ctx.fillText(description, 10, 35 + 50 * index);
                 if (location) {
-                    ctx.fillText(`Lat: ${location.latitude.toFixed(4)}, Lng: ${location.longitude.toFixed(4)}`, 10, 70
+                    ctx.fillText(`Lat: ${location.latitude.toFixed(4)}, Lng: ${location.longitude.toFixed(4)}`, 10, 70 + 50 * index);
+                }
+            });
+        }
+
+        async function processFrame() {
+            console.log('processFrame function called');
+            if (isProcessing) return;
+            isProcessing = true;
+
+            try {
+                statusMessage.textContent = 'Detecting landmarks...';
+                const imageData = await captureFrame();
+                
+                let latitude, longitude;
+                try {
+                    const location = await getUserLocation();
+                    latitude = location.latitude;
+                    longitude = location.longitude;
+                    console.log(`User location: ${latitude}, ${longitude}`);
+                } catch (error) {
+                    console.warn('Unable to get user location:', error);
+                }
+
+                const landmarks = await detectLandmark(imageData, latitude, longitude);
+
+                if (landmarks && landmarks.length > 0) {
+                    statusMessage.textContent = 'Landmarks detected: ';
+                    const newLandmarks = landmarks.filter(landmark => 
+                        landmark.score >= 0.3 && !lastDetectedLandmarks.includes(landmark.description)
+                    );
+
+                    for (const landmark of newLandmarks) {
+                        lastDetectedLandmarks.push(landmark.description);
+                        statusMessage.textContent += `${landmark.description}; `;
+                        const facts = await fetchLandmarkFacts(landmark.description);
+                        displayFacts(landmark.description, facts);
+                    }
+
+                    drawAROverlay(landmarks);
+
+                    // Keep only the last 5 detected landmarks
+                    if (lastDetectedLandmarks.length > 5) {
+                        lastDetectedLandmarks = lastDetectedLandmarks.slice(-5);
+                    }
+                } else {
+                    statusMessage.textContent = 'No landmarks detected in this frame';
+                    drawAROverlay([]);
+                }
+            } catch (error) {
+                console.error('Error processing frame:', error);
+                statusMessage.textContent = `Error: ${error.message || 'Unable to process frame'}`;
+            } finally {
+                isProcessing = false;
+                setTimeout(processFrame, 3000); // Process every 3 seconds
+            }
+        }
+    </script>
+</body>
+</html>
