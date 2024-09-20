@@ -64,6 +64,11 @@
             max-height: 300px;
             overflow-y: auto;
         }
+        #nearbyAttractions {
+            padding: 20px;
+            max-height: 300px;
+            overflow-y: auto;
+        }
         h2 {
             margin-top: 0;
         }
@@ -79,6 +84,18 @@
             padding: 5px 10px;
             border-radius: 5px;
             z-index: 1000;
+        }
+        #locationConsent {
+            display: none;
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background-color: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.3);
+            z-index: 2000;
         }
     </style>
 </head>
@@ -100,9 +117,20 @@
                 <p id="landmarkName"></p>
                 <ul id="factsList"></ul>
             </div>
+            <div id="nearbyAttractions">
+                <h2>Nearby Attractions</h2>
+                <ul id="attractionsList"></ul>
+            </div>
         </div>
     </div>
+    <div id="locationConsent">
+        <h3>Location Permission</h3>
+        <p>To show nearby attractions, we need your location. Do you allow us to use your location?</p>
+        <button id="allowLocation">Allow</button>
+        <button id="denyLocation">Deny</button>
+    </div>
 
+    <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyA4Xo27wNyl5vJXm32137rlFa4VAcc7JJ4&libraries=places"></script>
     <script>
         const landingPage = document.getElementById('landingPage');
         const explorerPage = document.getElementById('explorerPage');
@@ -113,19 +141,38 @@
         const landmarkName = document.getElementById('landmarkName');
         const factsList = document.getElementById('factsList');
         const statusMessage = document.getElementById('statusMessage');
+        const locationConsent = document.getElementById('locationConsent');
+        const allowLocationButton = document.getElementById('allowLocation');
+        const denyLocationButton = document.getElementById('denyLocation');
+        const attractionsList = document.getElementById('attractionsList');
         
         let lastDetectedLandmark = '';
         let isProcessing = false;
+        let userLocation = null;
 
         startButton.addEventListener('click', () => {
             landingPage.style.display = 'none';
-            explorerPage.style.display = 'block';
-            startExplorer();
+            locationConsent.style.display = 'block';
         });
 
-        async function startExplorer() {
+        allowLocationButton.addEventListener('click', () => {
+            locationConsent.style.display = 'none';
+            explorerPage.style.display = 'block';
+            startExplorer(true);
+        });
+
+        denyLocationButton.addEventListener('click', () => {
+            locationConsent.style.display = 'none';
+            explorerPage.style.display = 'block';
+            startExplorer(false);
+        });
+
+        async function startExplorer(useLocation) {
             try {
                 await startCamera();
+                if (useLocation) {
+                    await getUserLocation();
+                }
                 processFrame();
             } catch (error) {
                 console.error('Error starting explorer:', error);
@@ -153,6 +200,25 @@
                 statusMessage.textContent = 'Error: Unable to access camera';
                 throw error;
             }
+        }
+
+        async function getUserLocation() {
+            return new Promise((resolve, reject) => {
+                navigator.geolocation.getCurrentPosition(
+                    (position) => {
+                        userLocation = {
+                            lat: position.coords.latitude,
+                            lng: position.coords.longitude
+                        };
+                        resolve(userLocation);
+                        fetchNearbyAttractions();
+                    },
+                    (error) => {
+                        console.error('Error getting user location:', error);
+                        reject(error);
+                    }
+                );
+            });
         }
 
         async function captureFrame() {
@@ -229,6 +295,32 @@
             if (location) {
                 ctx.fillText(`Lat: ${location.latitude.toFixed(4)}, Lng: ${location.longitude.toFixed(4)}`, 10, 70);
             }
+        }
+
+        async function fetchNearbyAttractions() {
+            if (!userLocation) return;
+
+            const service = new google.maps.places.PlacesService(document.createElement('div'));
+            const request = {
+                location: userLocation,
+                radius: '5000',
+                type: ['tourist_attraction']
+            };
+
+            service.nearbySearch(request, (results, status) => {
+                if (status === google.maps.places.PlacesServiceStatus.OK) {
+                    displayNearbyAttractions(results.slice(0, 5));
+                }
+            });
+        }
+
+        function displayNearbyAttractions(attractions) {
+            attractionsList.innerHTML = '';
+            attractions.forEach(attraction => {
+                const li = document.createElement('li');
+                li.textContent = attraction.name;
+                attractionsList.appendChild(li);
+            });
         }
 
         async function processFrame() {
