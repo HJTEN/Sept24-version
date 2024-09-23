@@ -4,9 +4,11 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Landmark Explorer</title>
+    <!-- Google Fonts for enhanced typography -->
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet">
     <style>
         body {
-            font-family: Arial, sans-serif;
+            font-family: 'Poppins', sans-serif;
             margin: 0;
             padding: 0;
             display: flex;
@@ -14,6 +16,7 @@
             min-height: 100vh;
             background-color: #f0f0f0;
         }
+
         .container {
             flex: 1;
             display: flex;
@@ -22,23 +25,56 @@
             justify-content: center;
             padding: 20px;
         }
+
+        /* Landing Page Styles */
         #landingPage {
             text-align: center;
+            background-image: url('https://source.unsplash.com/featured/?landmark');
+            background-size: cover;
+            background-position: center;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            color: white;
+            backdrop-filter: blur(5px);
         }
+
+        #landingPage h1 {
+            font-size: 48px;
+            margin: 0;
+            text-shadow: 0px 4px 6px rgba(0, 0, 0, 0.5);
+        }
+
+        #landingPage p {
+            font-size: 20px;
+            margin-top: 10px;
+            margin-bottom: 30px;
+            text-shadow: 0px 2px 4px rgba(0, 0, 0, 0.3);
+        }
+
         #startButton {
-            font-size: 18px;
-            padding: 10px 20px;
-            background-color: #4CAF50;
+            font-size: 20px;
+            padding: 15px 30px;
+            background-image: linear-gradient(135deg, #4CAF50, #2196F3);
             color: white;
             border: none;
-            border-radius: 5px;
+            border-radius: 50px;
             cursor: pointer;
+            transition: transform 0.3s, background-color 0.3s;
         }
+
+        #startButton:hover {
+            transform: scale(1.05);
+        }
+
+        /* Explorer Page Styles */
         #explorerPage {
             display: none;
             width: 100%;
             max-width: 800px;
         }
+
         #videoContainer {
             position: relative;
             width: 100%;
@@ -47,11 +83,13 @@
             box-shadow: 0 0 10px rgba(0,0,0,0.1);
             overflow: hidden;
         }
+
         #videoFeed {
             width: 100%;
             height: auto;
             display: block;
         }
+
         #arOverlay {
             position: absolute;
             top: 0;
@@ -59,43 +97,107 @@
             width: 100%;
             height: 100%;
         }
-        #facts {
-            padding: 20px;
-            max-height: 300px;
-            overflow-y: auto;
-        }
-        #nearbyAttractions {
-            padding: 20px;
-            max-height: 300px;
-            overflow-y: auto;
-        }
-        h2 {
-            margin-top: 0;
-        }
-        ul {
-            padding-left: 20px;
-        }
+
         #statusMessage {
             position: absolute;
             top: 10px;
             left: 10px;
             background-color: rgba(0, 0, 0, 0.7);
             color: white;
-            padding: 5px 10px;
+            padding: 10px 15px;
             border-radius: 5px;
+            font-family: 'Roboto', sans-serif;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
             z-index: 1000;
+            transition: opacity 0.5s;
         }
+
+        #facts, #nearbyAttractions {
+            padding: 20px;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        h2 {
+            margin-top: 0;
+        }
+
+        /* Fact Cards */
+        .fact-card {
+            background-color: #ffffff;
+            border-radius: 10px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+            margin: 10px 0;
+            padding: 15px;
+            font-size: 16px;
+            line-height: 1.5;
+        }
+
+        .fact-card h3 {
+            font-size: 18px;
+            margin-bottom: 10px;
+        }
+
+        #factsList, #attractionsList {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        /* Location Consent Modal */
         #locationConsent {
             display: none;
             position: fixed;
             top: 50%;
             left: 50%;
             transform: translate(-50%, -50%);
-            background-color: white;
-            padding: 20px;
+            background-color: rgba(255, 255, 255, 0.9);
+            padding: 30px;
             border-radius: 10px;
-            box-shadow: 0 0 10px rgba(0,0,0,0.3);
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.2);
             z-index: 2000;
+            transition: opacity 0.3s ease-in-out, transform 0.3s;
+        }
+
+        #locationConsent.show {
+            opacity: 1;
+            transform: translate(-50%, -50%) scale(1);
+        }
+
+        #locationConsent.hide {
+            opacity: 0;
+            transform: translate(-50%, -50%) scale(0.9);
+        }
+
+        #allowLocation, #denyLocation {
+            padding: 12px 20px;
+            font-size: 16px;
+            border-radius: 8px;
+            margin: 10px;
+            cursor: pointer;
+        }
+
+        #allowLocation {
+            background-color: #4CAF50;
+            color: white;
+        }
+
+        #denyLocation {
+            background-color: #FF0000;
+            color: white;
+        }
+
+        /* Mobile Responsive */
+        @media only screen and (max-width: 600px) {
+            #startButton {
+                font-size: 16px;
+                padding: 10px 20px;
+            }
+
+            #facts, #nearbyAttractions {
+                padding: 10px;
+                max-height: 200px;
+            }
         }
     </style>
 </head>
@@ -106,23 +208,30 @@
             <p>Discover landmarks around you in real-time!</p>
             <button id="startButton">Start Exploring</button>
         </div>
+
         <div id="explorerPage">
             <div id="videoContainer">
                 <video id="videoFeed" autoplay playsinline muted></video>
                 <canvas id="arOverlay"></canvas>
                 <div id="statusMessage">Initializing...</div>
             </div>
+
             <div id="facts">
                 <h2>Landmark Facts</h2>
-                <p id="landmarkName"></p>
-                <ul id="factsList"></ul>
+                <div id="factsList">
+                    <!-- Fact cards will go here -->
+                </div>
             </div>
+
             <div id="nearbyAttractions">
                 <h2>Nearby Attractions</h2>
-                <ul id="attractionsList"></ul>
+                <div id="attractionsList">
+                    <!-- Nearby attraction cards will go here -->
+                </div>
             </div>
         </div>
     </div>
+
     <div id="locationConsent">
         <h3>Location Permission</h3>
         <p>To show nearby attractions, we need your location. Do you allow us to use your location?</p>
@@ -269,19 +378,13 @@
         }
 
         function displayFacts(name, facts) {
-            landmarkName.textContent = name || "No landmark detected";
-            factsList.innerHTML = '';
-            
-            if (facts) {
-                const sentences = facts.split('. ').filter(s => s.trim().length > 0);
-                const topFacts = sentences.slice(0, 5).map(s => s.trim() + (s.endsWith('.') ? '' : '.'));
-
-                topFacts.forEach(fact => {
-                    const li = document.createElement('li');
-                    li.textContent = fact;
-                    factsList.appendChild(li);
-                });
-            }
+            const factsElement = document.createElement('div');
+            factsElement.classList.add('fact-card');
+            factsElement.innerHTML = `
+                <h3>${name}</h3>
+                <p>${facts}</p>
+            `;
+            factsList.appendChild(factsElement);
         }
 
         function drawAROverlay(name, location) {
