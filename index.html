@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Landmark Explorer</title>
+    <!-- Google Fonts for enhanced typography -->
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet">
     <style>
         body {
@@ -23,27 +24,6 @@
             align-items: center;
             justify-content: center;
             padding: 20px;
-        }
-
-        /* Navigation Bar */
-        .navbar {
-            width: 100%;
-            background-color: #333;
-            overflow: hidden;
-        }
-
-        .navbar a {
-            float: left;
-            display: block;
-            color: white;
-            text-align: center;
-            padding: 14px 20px;
-            text-decoration: none;
-        }
-
-        .navbar a:hover {
-            background-color: #ddd;
-            color: black;
         }
 
         /* Landing Page Styles */
@@ -219,23 +199,9 @@
                 max-height: 200px;
             }
         }
-
-        /* Hidden pages */
-        .page {
-            display: none;
-        }
-
-        .active {
-            display: block;
-        }
     </style>
 </head>
 <body>
-    <div class="navbar">
-        <a href="#" id="factsNav">Facts</a>
-        <a href="#" id="attractionsNav">Nearby Attractions</a>
-    </div>
-
     <div class="container">
         <div id="landingPage">
             <h1>Welcome to Landmark Explorer</h1>
@@ -250,16 +216,14 @@
                 <div id="statusMessage">Initializing...</div>
             </div>
 
-            <!-- Landmark Facts Section -->
-            <div id="facts" class="page active">
+            <div id="facts">
                 <h2>Landmark Facts</h2>
                 <div id="factsList">
                     <!-- Fact cards will go here -->
                 </div>
             </div>
 
-            <!-- Nearby Attractions Section -->
-            <div id="nearbyAttractions" class="page">
+            <div id="nearbyAttractions">
                 <h2>Nearby Attractions</h2>
                 <div id="attractionsList">
                     <!-- Nearby attraction cards will go here -->
@@ -280,15 +244,19 @@
         const landingPage = document.getElementById('landingPage');
         const explorerPage = document.getElementById('explorerPage');
         const startButton = document.getElementById('startButton');
-        const factsSection = document.getElementById('facts');
-        const attractionsSection = document.getElementById('nearbyAttractions');
-        const factsNav = document.getElementById('factsNav');
-        const attractionsNav = document.getElementById('attractionsNav');
+        const video = document.getElementById('videoFeed');
+        const canvas = document.getElementById('arOverlay');
+        const ctx = canvas.getContext('2d');
+        const landmarkName = document.getElementById('landmarkName');
         const factsList = document.getElementById('factsList');
-        const attractionsList = document.getElementById('attractionsList');
+        const statusMessage = document.getElementById('statusMessage');
         const locationConsent = document.getElementById('locationConsent');
         const allowLocationButton = document.getElementById('allowLocation');
         const denyLocationButton = document.getElementById('denyLocation');
+        const attractionsList = document.getElementById('attractionsList');
+        
+        let lastDetectedLandmark = '';
+        let isProcessing = false;
         let userLocation = null;
 
         startButton.addEventListener('click', () => {
@@ -308,25 +276,38 @@
             startExplorer(false);
         });
 
-        factsNav.addEventListener('click', (e) => {
-            e.preventDefault();
-            showSection('facts');
-        });
+        async function startExplorer(useLocation) {
+            try {
+                await startCamera();
+                if (useLocation) {
+                    await getUserLocation();
+                }
+                processFrame();
+            } catch (error) {
+                console.error('Error starting explorer:', error);
+                statusMessage.textContent = 'Error: Unable to start explorer';
+            }
+        }
 
-        attractionsNav.addEventListener('click', (e) => {
-            e.preventDefault();
-            showSection('nearbyAttractions');
-        });
-
-        function showSection(section) {
-            factsSection.classList.remove('active');
-            attractionsSection.classList.remove('active');
-
-            if (section === 'facts') {
-                factsSection.classList.add('active');
-            } else if (section === 'nearbyAttractions') {
-                attractionsSection.classList.add('active');
-                displayNearbyAttractions();  // Show attractions when the user switches to that tab
+        async function startCamera() {
+            try {
+                const constraints = {
+                    video: { facingMode: 'environment' }
+                };
+                const stream = await navigator.mediaDevices.getUserMedia(constraints);
+                video.srcObject = stream;
+                return new Promise((resolve) => {
+                    video.onloadedmetadata = () => {
+                        canvas.width = video.videoWidth;
+                        canvas.height = video.videoHeight;
+                        statusMessage.textContent = 'Camera ready. Detecting landmarks...';
+                        resolve(video);
+                    };
+                });
+            } catch (error) {
+                console.error('Error accessing camera:', error);
+                statusMessage.textContent = 'Error: Unable to access camera';
+                throw error;
             }
         }
 
@@ -349,6 +330,76 @@
             });
         }
 
+        async function captureFrame() {
+            const tempCanvas = document.createElement('canvas');
+            tempCanvas.width = video.videoWidth;
+            tempCanvas.height = video.videoHeight;
+            tempCanvas.getContext('2d').drawImage(video, 0, 0);
+            return tempCanvas.toDataURL('image/jpeg', 0.8).split(',')[1];
+        }
+
+        async function detectLandmark(imageData) {
+            const apiUrl = `https://vision.googleapis.com/v1/images:annotate?key=AIzaSyA4Xo27wNyl5vJXm32137rlFa4VAcc7JJ4`;
+            const requestBody = {
+                requests: [{
+                    image: { content: imageData },
+                    features: [{ type: 'LANDMARK_DETECTION', maxResults: 1 }]
+                }]
+            };
+
+            const response = await fetch(apiUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(requestBody)
+            });
+
+            if (!response.ok) {
+                throw new Error('Failed to fetch data from Google Vision API');
+            }
+
+            const data = await response.json();
+            return data.responses[0].landmarkAnnotations || [];
+        }
+
+        async function fetchLandmarkFacts(landmarkName) {
+            const apiUrl = `https://en.wikipedia.org/w/api.php?action=query&format=json&prop=extracts&exintro=false&explaintext=true&titles=${encodeURIComponent(landmarkName)}&origin=*`;
+
+            const response = await fetch(apiUrl);
+            if (!response.ok) {
+                throw new Error('Failed to fetch landmark information');
+            }
+
+            const data = await response.json();
+            const pages = data.query.pages;
+            const pageId = Object.keys(pages)[0];
+            const page = pages[pageId];
+
+            return page.extract ? page.extract : 'No description available.';
+        }
+
+        function displayFacts(name, facts) {
+            const factsElement = document.createElement('div');
+            factsElement.classList.add('fact-card');
+            factsElement.innerHTML = `
+                <h3>${name}</h3>
+                <p>${facts}</p>
+            `;
+            factsList.appendChild(factsElement);
+        }
+
+        function drawAROverlay(name, location) {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+            ctx.fillRect(0, 0, canvas.width, 50);
+            ctx.fillStyle = 'white';
+            ctx.font = '20px Arial';
+            ctx.fillText(name || "No landmark detected", 10, 35);
+            if (location) {
+                ctx.fillText(`Lat: ${location.latitude.toFixed(4)}, Lng: ${location.longitude.toFixed(4)}`, 10, 70);
+            }
+        }
+
         async function fetchNearbyAttractions() {
             if (!userLocation) return;
 
@@ -361,13 +412,7 @@
 
             service.nearbySearch(request, (results, status) => {
                 if (status === google.maps.places.PlacesServiceStatus.OK) {
-                    // Sort attractions by distance (ascending) and limit to 10
-                    results.sort((a, b) => {
-                        const distanceA = calculateDistance(userLocation.lat, userLocation.lng, a.geometry.location.lat(), a.geometry.location.lng());
-                        const distanceB = calculateDistance(userLocation.lat, userLocation.lng, b.geometry.location.lat(), b.geometry.location.lng());
-                        return distanceA - distanceB;
-                    });
-                    displayNearbyAttractions(results.slice(0, 10));
+                    displayNearbyAttractions(results.slice(0, 5));
                 }
             });
         }
@@ -400,17 +445,38 @@
             return deg * (Math.PI/180);
         }
 
-        async function startExplorer(useLocation) {
+        async function processFrame() {
+            if (isProcessing) return;
+            isProcessing = true;
+
             try {
-                if (useLocation) {
-                    await getUserLocation();
+                statusMessage.textContent = 'Detecting landmarks...';
+                const imageData = await captureFrame();
+                const landmarks = await detectLandmark(imageData);
+
+                if (landmarks.length > 0) {
+                    const landmark = landmarks[0];
+                    if (landmark.score >= 0.5 && landmark.description !== lastDetectedLandmark) {
+                        lastDetectedLandmark = landmark.description;
+                        statusMessage.textContent = `Detected: ${landmark.description}`;
+                        const facts = await fetchLandmarkFacts(landmark.description);
+                        displayFacts(landmark.description, facts);
+                        drawAROverlay(landmark.description, landmark.locations[0]);
+                    }
+                } else {
+                    statusMessage.textContent = 'No landmarks detected';
+                    drawAROverlay(null, null);
                 }
-                // Continue with other operations (landmark detection, etc.)
             } catch (error) {
-                console.error('Error starting explorer:', error);
+                console.error('Error processing frame:', error);
+                statusMessage.textContent = 'Error: Unable to process frame';
+            } finally {
+                isProcessing = false;
+                setTimeout(processFrame, 5000);
             }
         }
     </script>
 </body>
 </html>
+
 
