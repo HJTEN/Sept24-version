@@ -4,15 +4,30 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>P.O.I. Explorer</title>
+    <img src="/Users/harrytenwick/Desktop/Images/logo.png" alt="POI Logo" class="logo">
     <!-- Google Fonts -->
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet">
     <style>
-        body {
+        
+        /* Logo */
+        .logo {
+            width: 150px; /* Adjust width for mobile */
+            height: auto;
+            max-width: 80%; /* Make sure it doesn't exceed 80% of the width */
+            margin: auto; /* Centering */
+            padding: 75px; /* lower logo top below the nav bar */
+            display: block; /* Ensures the image behaves like a block element */
+        }
+        
+        
+            body {
             font-family: 'Poppins', sans-serif;
             margin: 0;
             padding: 0;
             background-color: #f8f8f8;
         }
+
+        
 
         /* Navigation Bar */
         nav {
@@ -52,15 +67,16 @@
         #landingPage {
             display: flex;
             flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            flex: 1;
+            justify-content: flex-start; /* Align items to the start */
+            align-items: center; /* Center items horizontally */
+            flex: 1; /* Allow the page to grow */
             text-align: center;
-        }
-
+            min-height: 100vh; /* Make sure it takes full height */
+            padding: 20px; /* Add padding for better spacing */
+        } 
         #landingPage h1 {
             font-size: 36px;
-            margin-bottom: 20px;
+            margin-bottom: auto;
         }
 
         #startButton {
@@ -68,10 +84,14 @@
             color: white;
             border: none;
             border-radius: 10px;
-            padding: 15px 30px;
+            padding: 10px 20px; /* Add padding */
             font-size: 18px;
             cursor: pointer;
             transition: transform 0.3s;
+            margin-bottom: 500px; /* Some space below the button */
+            display: block; /* Block element */
+            margin-left: auto; /* Center */
+            margin-right: auto; /* Center */
         }
 
         #startButton:hover {
